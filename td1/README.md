@@ -1,8 +1,8 @@
 # TD1 — Première revue : la caisse du magasin
 
-Objectif : faire votre **première revue de code complète** sur github.com —
-annotations en ligne puis corrections proposées, le tout dans une pull
-request.
+Objectif : faire votre **première revue de code complète**, en groupe, sur
+github.com — annotations en ligne puis corrections proposées, le tout dans
+une pull request.
 
 ## Le code à revoir
 
@@ -10,37 +10,66 @@ request.
 - Il contient **volontairement plusieurs problèmes**. À vous de les trouver,
   de les commenter, puis d'en corriger au moins trois.
 
-## À faire
+## Constitution du groupe
 
-1. **Forkez** ce dépôt (bouton *Fork*, en haut à droite de la page GitHub).
-2. Clonez votre fork et créez votre branche **depuis `td1`** :
+- Se regrouper (taille indiquée par l'enseignant, ex. 2-3 étudiants).
+- Désigner un **porteur** : c'est lui qui forke le dépôt et son **nom de
+  famille** donne le préfixe du groupe (ex. `2026-IUT-BUT3-DUPONT`).
+- Lire les consignes générales dans [`td/README.md`](../td/README.md) :
+  nommage, `GROUPE.md`, déroulé complet.
+
+## Étapes précises
+
+1. **Le porteur forke** le dépôt `IUT-BUT3-2026/revues-de-code` (bouton
+   *Fork*).
+2. **Le porteur ajoute les membres** : fork → *Settings* → *Collaborators* →
+   pseudo GitHub de chaque membre (ils acceptent l'invitation par email).
+3. **Cloner et créer la branche préfixée** (par le porteur ou un membre) :
 
    ```sh
-   git clone https://github.com/<votre-pseudo>/revues-de-code.git
+   git clone https://github.com/<porteur>/revues-de-code.git
    cd revues-de-code
    git fetch origin
-   git checkout -b td1-<votre-pseudo> origin/td1
+   git checkout -b 2026-IUT-BUT3-DUPONT-td1 origin/td1
    ```
 
-3. Ouvrez la **pull request** :
-   github.com → votre dépôt → onglet *Pull requests* → *New pull request*.
-   - base : la branche principale du dépôt du cours (`IUT-BUT3-2026/revues-de-code`)
-   - compare : `td1-<votre-pseudo>` (depuis votre fork)
-   - complétez le corps avec le **modèle fourni** automatiquement.
-4. **Annotez** le code : sur l'onglet *Files changed* de la PR, cliquez sur
-   une ligne pour la commenter. Un commentaire = un problème, avec le
-   *pourquoi*. Visez au moins **5 problèmes identifiés**.
-5. **Corrigez** ensuite au moins **3 problèmes** : modifiez le code, puis
-   `git add` / `git commit` / `git push` — la PR se met à jour toute seule.
-6. Laissez la PR **ouverte** et déposez son lien à l'endroit indiqué par
-   l'enseignant (Moodle, mail…).
+   (remplacer `2026-IUT-BUT3-DUPONT` par le préfixe de votre groupe)
+
+4. **Remplir `GROUPE.md`** (à la racine) : préfixe, porteur, membres, TD.
+   Commit :
+
+   ```sh
+   git add GROUPE.md
+   git commit -m "GROUPE : identification du groupe"
+   ```
+
+5. **Ouvrir la pull request** : github.com → fork du groupe → *Pull
+   requests* → *New pull request* :
+   - base : branche principale du dépôt du cours (`IUT-BUT3-2026/revues-de-code`)
+   - compare : `2026-IUT-BUT3-DUPONT-td1` (depuis le fork du groupe)
+   - titre : `2026-IUT-BUT3-DUPONT — TD1 — revue de cart.ts`
+   - corps : compléter le **modèle fourni** automatiquement
+6. **Annoter le code** : onglet *Files changed* de la PR → cliquer sur une
+   ligne pour commenter. **Un commentaire = un problème**, avec le *pourquoi*.
+   Minimum : **5 problèmes identifiés**.
+7. **Corriger** au moins **3 problèmes** :
+
+   ```sh
+   git add .
+   git commit -m "TD1 : corrections proposées"
+   git push origin 2026-IUT-BUT3-DUPONT-td1
+   ```
+
+   La PR se met à jour à chaque push.
+8. **Rendre** : coller le **lien de la PR** dans la section « Rendu » de
+   `GROUPE.md`, commit + push. Laisser la PR **ouverte** et déposer le lien à
+   l'endroit indiqué par l'enseignant.
 
 ## Consignes de revue
 
-- Appliquez la [checklist de revue](../../templates/checklist-revue.md).
-- Les **attitudes du Module 1** : sur le code, pas sur la personne ;
-  expliquer le *pourquoi* ; suggérer, ne pas imposer.
-- Titre de la PR : `TD1 – <pseudo> – revue de cart.ts`.
+- Appliquer la [checklist de revue](../../templates/checklist-revue.md).
+- **Attitudes du Module 1** : sur le code, pas sur la personne ; expliquer le
+  *pourquoi* ; suggérer, ne pas imposer.
 
 ## Pistes (à n'ouvrir qu'après votre revue)
 
@@ -62,4 +91,4 @@ request.
 | Commentaires pertinents (au moins 5 problèmes réels) | 6 |
 | Corrections proposées (au moins 3, réelles) | 6 |
 | Justification (le *pourquoi* est expliqué) | 4 |
-| Corps de PR et ton constructif | 4 |
+| Corps de PR, ton et `GROUPE.md` complet | 4 |
