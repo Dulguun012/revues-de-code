@@ -16,7 +16,7 @@ une pull request.
 - Désigner un **porteur** : c'est lui qui forke le dépôt et son **nom de
   famille** donne le préfixe du groupe (ex. `2026-IUT-BUT3-DUPONT`).
 - Lire les consignes générales dans [`td/README.md`](../td/README.md) :
-  nommage, `GROUPE.md`, déroulé complet.
+  nommage, `ETUDIANTS.md`, déroulé complet.
 
 ## Étapes précises
 
@@ -35,12 +35,12 @@ une pull request.
 
    (remplacer `2026-IUT-BUT3-DUPONT` par le préfixe de votre groupe)
 
-4. **Remplir `GROUPE.md`** (à la racine) : préfixe, porteur, membres, TD.
+4. **Remplir `ETUDIANTS.md`** (à la racine) : préfixe, porteur, membres, TD.
    Commit :
 
    ```sh
-   git add GROUPE.md
-   git commit -m "GROUPE : identification du groupe"
+   git add ETUDIANTS.md
+   git commit -m "ETUDIANTS : identification du groupe"
    ```
 
 5. **Ouvrir la pull request** : github.com → fork du groupe → *Pull
@@ -62,7 +62,7 @@ une pull request.
 
    La PR se met à jour à chaque push.
 8. **Rendre** : coller le **lien de la PR** dans la section « Rendu » de
-   `GROUPE.md`, commit + push. Laisser la PR **ouverte** et déposer le lien à
+   `ETUDIANTS.md`, commit + push. Laisser la PR **ouverte** et déposer le lien à
    l'endroit indiqué par l'enseignant.
 
 ## Consignes de revue
@@ -91,4 +91,4 @@ une pull request.
 | Commentaires pertinents (au moins 5 problèmes réels) | 6 |
 | Corrections proposées (au moins 3, réelles) | 6 |
 | Justification (le *pourquoi* est expliqué) | 4 |
-| Corps de PR, ton et `GROUPE.md` complet | 4 |
+| Corps de PR, ton et `ETUDIANTS.md` complet | 4 |
