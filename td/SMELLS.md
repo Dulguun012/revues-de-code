@@ -370,6 +370,38 @@ code, passing the rest — genuinely non-deterministic, not a hypothetical:
   `vi.useFakeTimers()` / `vi.setSystemTime(...)` — so test and code agree
   on a single, frozen "now" instead of each independently asking the OS.
 
+## 22. Locals promoted to fields for no reason — scope creep
+
+Two variables that only ever needed to live for the duration of a single
+method call are now `Product` fields instead:
+
+- `nextStat: PrdStat | undefined` — `sell()` used to compute this as a
+  `let` local (see smell #14) right before assigning it to `this.stat`; it
+  now writes `this.nextStat = "out_of_stock"` first and reads it right back
+  a line later. Nothing else in the class reads `nextStat` between calls —
+  it's not meant to represent any lasting state — but because it's a
+  field, it now *looks* like domain state a reader has to account for: is
+  `nextStat` the product's pending status change? Does anything outside
+  `sell()` care what it currently holds? (No — but nothing in the type
+  signals that.)
+- `dscSnapshot: string[] | undefined` — `addDiscount()`'s throwaway JSON
+  round-trip (see smell #21) used to be a `const snapshot` local, scoped to
+  exactly the few lines that use it; it's now `this.dscSnapshot`, so it
+  persists on the object after `addDiscount()` returns, holding a stale
+  copy of whatever `dscs` looked like the *last* time a discount was
+  added — until the next call overwrites it, or it's just permanently
+  `undefined` if `addDiscount()` was never called. Either way, it's memory
+  and object surface area that exists for no reason a reader can discover
+  by looking at the field alone.
+
+Both fields have to be typed `| undefined` (they're set conditionally, deep
+inside nested `if`s, and TypeScript can't otherwise prove they're always
+assigned by the time they're read) — which is itself a tell: a genuine
+piece of object state usually has an initial value that makes sense before
+any method runs; these two don't, because they were never state to begin
+with. The fix is simply demoting them back to `let`/`const` locals scoped
+to the method that uses them.
+
 ## `Product.test.ts` — deliberate design, not a smell
 
 Worth calling out explicitly in review so it isn't mistaken for an
