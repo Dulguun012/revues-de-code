@@ -132,7 +132,7 @@ export class Product {
   async addDiscount(dscCode: string): Promise<void> {
     this.dscs.push(dscCode);
     this.updatedAt = new Date();
-    await prisma.product.update({
+    prisma.product.update({
       where: { id: this.id },
       data: { discounts: this.dscs, updatedAt: this.updatedAt },
     });

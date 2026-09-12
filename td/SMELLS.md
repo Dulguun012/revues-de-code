@@ -150,6 +150,23 @@ is the classic `let`-vs-`const`-and-literal-types trap.) Compare with
 `deprecate()` (207), which assigns the literal directly
 (`this.stat = "deprecated"`) and type-checks cleanly with no cast at all.
 
+## 15. Floating promise — `addDiscount()`
+
+`addDiscount()` (132–139) mutates `this.dscs` and `this.updatedAt`
+synchronously, then calls `prisma.product.update(...)` **without `await`**
+— unlike every sibling mutator (`addImage`, `addSupplierToRegion`,
+`setMargin`, `receiveStock`, `sell`, `deprecate`), which all `await` their
+Prisma call. The method is still declared `async (): Promise<void>` and
+still compiles cleanly (`tsc --noEmit` has no built-in floating-promise
+check — that's an ESLint rule, `@typescript-eslint/no-floating-promises`,
+and there's no ESLint config in `td/`, see smell #12), so nothing signals
+the bug at the type level. The practical effect: `await product.addDiscount(...)`
+at a call site resolves as soon as the synchronous body finishes, before the
+DB write completes or even settles — a caller that assumes "awaited ⇒
+persisted" is wrong, the write races the rest of the request, and if the
+Prisma call rejects, it surfaces as an unhandled promise rejection instead
+of a catchable error at the call site.
+
 ## `Product.test.ts` — deliberate design, not a smell
 
 Worth calling out explicitly in review so it isn't mistaken for an
