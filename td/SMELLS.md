@@ -167,6 +167,20 @@ persisted" is wrong, the write races the rest of the request, and if the
 Prisma call rejects, it surfaces as an unhandled promise rejection instead
 of a catchable error at the call site.
 
+## 16. Unnecessary getters/setters — `Price`
+
+`Price` now has `getAmt`/`setAmt`, `getCcy`/`setCcy`, `getMgn`/`setMgn`
+(added after `getResellerPrice()`) that do nothing but read or reassign an
+already-public field (`amt`, `ccy`, `mgn` are all public, no `private`
+anywhere in the class). This is boilerplate that provides zero real
+encapsulation — anyone can already do `price.amt = -50` directly, so the
+setters don't guard against anything (no validation, e.g. `setAmt` happily
+accepts a negative amount), and the getters don't compute or hide
+anything the field itself doesn't already expose. Worse, they're dead:
+nothing in `Product.ts` calls them — `setMargin()` still mutates
+`this.price.mgn` directly (164) instead of going through `setMgn()`, so the
+class now has two inconsistent ways to do the same mutation.
+
 ## `Product.test.ts` — deliberate design, not a smell
 
 Worth calling out explicitly in review so it isn't mistaken for an
