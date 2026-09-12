@@ -181,6 +181,66 @@ nothing in `Product.ts` calls them — `setMargin()` still mutates
 `this.price.mgn` directly (164) instead of going through `setMgn()`, so the
 class now has two inconsistent ways to do the same mutation.
 
+## 17. "Tell, don't ask" violations — reaching into collaborators' fields
+
+Several methods pull a raw field out of another object and use it directly,
+instead of asking that object to do the work (or expose the derived
+value/behavior itself):
+
+- `setMargin()` (188): `this.price.mgn = mgnPct` reaches directly into
+  `Price`'s field. This is the sharpest case — `Price` already has a
+  `setMgn(mgn: number)` setter (smell #16), so `Product` bypasses its own
+  collaborator's API to poke the field instead, meaning the same mutation
+  now happens two different ways in the codebase depending on which line
+  you're reading.
+- `sell()` (227), `deprecate()` (245, 249): `s.eml` is read directly off
+  each `Supplier` to build a notification recipient. `Supplier` never gets
+  asked "who do I notify?" or "build me a notification" — `Product` decides
+  that a `Supplier`'s email *is* its notification recipient and reaches in
+  to get it, which is also what makes the notification-building logic
+  impossible to reuse or override per-supplier (see smell #2).
+- `receiveStock()` (202): `this.wh!.nm` is read directly off `Warehouse`
+  for a log line, rather than asking the warehouse to identify/describe
+  itself (e.g. a `describe()`/`toString()`-style method). Bundled with the
+  non-null assertion (smell #13), so this line is actually two smells at
+  once.
+- `Product.getResellerPrice()` (183–186, see smell #18): chains
+  `this.price.amt`, `this.price.mgn`, `this.price.vat` — three separate
+  reaches past its immediate collaborator (`this.price`) into that
+  collaborator's own fields — instead of asking `price` to compute its own
+  reseller price. This is the sharpest Law of Demeter violation in the
+  file: a method with the exact same name and purpose as
+  `Price.getResellerPrice()` already exists one call away, and this method
+  ignores it entirely.
+
+There is no longer a "does it right" example of this pattern left in the
+file — see smell #18.
+
+## 18. Duplicated pricing formula that bypasses its own collaborator
+
+`Product.getResellerPrice()` (183–186) used to simply delegate:
+`return this.price.getResellerPrice();`. It now re-implements the exact
+same margin/VAT formula inline —
+`(this.price.amt * this.price.mgn) / 100`, then VAT on top, mirroring
+`Price.getResellerPrice()` (59–63) line for line — instead of calling it.
+`Price.getResellerPrice()` is untouched and still correct (and still worth
+unit-testing on its own), but nothing in `Product` calls it anymore, so:
+
+- The formula now exists in two places. If pricing rules change (say, VAT
+  applies to the full amount instead of just the margin), a maintainer has
+  to remember to update both `Price.getResellerPrice()` *and*
+  `Product.getResellerPrice()` — miss one and the two methods silently
+  disagree with no compiler warning, since both are individually valid
+  TypeScript.
+- It compounds smell #17's Law of Demeter violation: `Product` no longer
+  just "asks" `price` for anything price-related — it reaches through
+  `price` into `amt`/`mgn`/`vat` directly, so `Price` could change its
+  internal field names or representation (e.g. switch `mgn` to a computed
+  getter, or store VAT differently) and silently break
+  `Product.getResellerPrice()` without touching `Price`'s own public API.
+
+## `Product.test.ts` — deliberate design, not a smell
+
 ## `Product.test.ts` — deliberate design, not a smell
 
 Worth calling out explicitly in review so it isn't mistaken for an
