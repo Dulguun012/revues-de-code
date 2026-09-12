@@ -1,211 +1,613 @@
-# Code smells — `td/Product.ts` (ordered by fix complexity)
+# Guided review — `td/Product.ts`
 
-Reordered from simplest to most complex. Start with the top to build confidence; move to harder refactors later. The God class (smell #1) is the overarching goal at the end.
+This is a student worksheet. `Product.ts` contains 25 deliberate code smells.
+They are listed here **from the simplest to the most complex**, so that you
+build confidence on quick wins before tackling the refactorings that need real
+design thinking. Smell #1 (the God class) is the overall goal of the exercise
+and comes last: most of the others are stepping stones toward it.
 
-## TIER 1: Simplest fixes (naming, syntax, local scope)
+Each entry gives you:
 
-### 11. Cryptic abbreviations everywhere — naming smell
-Most identifiers in the file are abbreviated to the point of requiring guesswork, even though class/interface names stayed full (`Supplier`, `Warehouse`, `Notification`): type aliases (`Chnl`, `PrdStat`), fields (`nm`, `slg`, `dscs`, `imgs`, `splrRgns`, `wgt`, `dims`, `qty`, `stk`, `stat`, `notifs`), interface members (`Notification.recip/subj/bod/chnl/prdId`), and params (`ctx`, `dscCode`, `rgn`, `mgnPct`). None of these save meaningful typing effort over the full word, but they cost every reader a mental lookup/disambiguation pass (is `stat` status or statistics? `dscs` discounts or descriptions?). It's also internally inconsistent — type/class names are spelled out while the fields and params of those same types are abbreviated (`class Supplier { nm, eml, rgn }`), so there's no single rule a reader can learn and apply.
+- **The smell** — what it is, in general (not specific to this file).
+- **How to detect it** — the questions to ask, the tools to run, the patterns
+  to grep for.
+- **Hint** — where to look in `Product.ts`. Not the answer.
+- **Expected from you** — what a correct fix should achieve, and how you will
+  prove it (tests, compiler, review).
 
-**Fix approach:** Global rename pass. Straightforward, no logic changes. Pre-requisite for making all other fixes readable to students.
+Rules of the game:
+
+- `npm run build` (`tsc --noEmit`) must stay green after every fix.
+- `npm test` must not get *worse*. Some tests fail on purpose today (see the
+  last section); part of the job is to make them pass.
+- Do **not** add assertions on Prisma calls or persisted state — tests stay
+  in-memory.
+- Commit after each smell, with a message naming the smell you fixed.
 
 ---
 
-### 12. Unused variable — `sell()`'s supplier loop
-`sell()`'s regional-supplier loop (198) destructures `for (const [rgn, s] of this.splrRgns)` but never reads `rgn` — the region key is bound and then silently ignored. This is intentionally left uncatchable by the build: `tsconfig.json` doesn't set `noUnusedLocals`/`noUnusedParameters`, so `tsc --noEmit` stays silent and there's no ESLint config in `td/` either — students have to actually read the loop body to notice `rgn` is dead, not rely on the compiler to point at it. `deprecate()`'s equivalent loop at 216 still uses the blank-slot form (`for (const [, s] of ...)`), so the two loops are now also inconsistent with each other in addition to being duplicated (see smell #3).
+## Tier 1 — Quick wins (naming, syntax, local scope)
 
-**Fix approach:** Delete the unused `rgn`. Consistency fix.
+These can each be fixed in minutes. They train your eye before the harder ones.
+
+### 11. Cryptic abbreviations
+
+**The smell.** Identifiers shortened until a reader has to *guess* what they
+mean. Abbreviations save keystrokes once and cost a mental lookup on every
+read, forever. The tell-tale sign is inconsistency: some names spelled out,
+others compressed, with no rule you can learn.
+
+**How to detect it.** Read a class's fields out loud. If you hesitate on any
+of them, or if two abbreviations could plausibly expand to the same word,
+you've found it. Also compare naming across layers: are type names, field
+names, and parameter names following the same convention?
+
+**Hint.** Compare the class names in this file to their fields. Then open
+`Product.test.ts` and read the *first* `describe` blocks: they are written
+against the names the code *should* use, and they fail today with a message
+telling you exactly which name is expected. Use them as your checklist.
+
+**Expected from you.** A rename pass with no behavior change. The
+naming-discovery tests at the top of `Product.test.ts` go green. Do this
+first — every other smell becomes easier to read once names are honest.
 
 ---
 
-### 9. Comment describes a symptom, not fixed by the code
-The file-level comment (lines 1–9) explains that the C# version's dual representation (`SyncEfColumns`/`HydrateFromEfColumns`) is "gone" — true for storage, but the class still exhibits the same class of problem in miniature: `Price` is a plain object with public mutable fields (`mgn`, `vat` set directly at 164, 187) that the containing `Product` must remember to persist manually on every mutation; there's no single source of truth enforced by the type system, just discipline.
+### 12. Unused variable
 
-**Fix approach:** Update or remove the misleading comment once other issues are addressed.
+**The smell.** A binding that is declared (or destructured) and never read.
+Dead names lie: they suggest something is being used when nothing is.
+
+**How to detect it.** The compiler *can* catch this — but only if it is asked
+to. Open `tsconfig.json` and look at which strictness flags are on and which
+are missing. Then read every `for` loop and every destructuring pattern in
+the file and ask, for each bound name, "where is this read?"
+
+**Hint.** Two methods in `Product` iterate over the same `Map` in the same
+way. One of them binds a name it never uses; the other doesn't. Spot the
+inconsistency between them.
+
+**Expected from you.** Remove the dead binding. Bonus: turn on the compiler
+flag that would have caught it, and see what else it flags (some of it is
+another smell on this list).
+
+---
+
+### 9. A comment that describes the past, not the code
+
+**The smell.** A comment that explains why the code *used* to be a certain
+way, or claims a problem is solved, while the code underneath still has the
+same shape of problem. Comments rot faster than code.
+
+**How to detect it.** Read the file-level comment first, then read the code
+as if the comment did not exist. Does the code actually deliver what the
+comment promises? Look especially for claims like "gone", "removed", "no
+longer needed".
+
+**Hint.** The header comment talks about keeping two representations in sync
+by hand. Look at `Price` and at every place `Product` touches a `Price` field
+and then persists it. Is there still "discipline instead of enforcement"
+going on?
+
+**Expected from you.** Either make the comment true (by fixing the code) or
+make the comment honest (by rewriting it). Don't leave a comment that
+misleads the next reader.
 
 ---
 
 ### 8. Magic numbers
-`Price` hardcodes `margin = 20` and `vat = 20` in its constructor (55–56) with no named constant and no explanation of why 20% is the default for every product.
 
-**Fix approach:** Extract named constants (`DEFAULT_MARGIN`, `DEFAULT_VAT`). Optional: make them configurable.
+**The smell.** A literal number in the code whose meaning is not obvious from
+context — and whose *reason* is not recorded anywhere. Why 20 and not 25? Who
+decided? Can it change?
 
----
+**How to detect it.** Grep for numeric literals other than `0`, `1`, `100`.
+For each hit, ask: "if the business changes this, how many places do I
+edit, and how do I find them?"
 
-### 23. Unused parameter — `addImage()`'s `overwrite`
-`addImage(ctx: string, url: string, overwrite: boolean)` takes a third parameter that reads as meaningful — "should this replace an existing image at that context key?" — but the body never references `overwrite` at all. Like smell #12, `tsc --noEmit` doesn't catch this (`noUnusedParameters` isn't enabled in `tsconfig.json`), so it compiles silently — a caller can pass `addImage("hero", url, false)` expecting the existing image to be preserved and get it clobbered/renamed anyway, with nothing in the type system or the build warning that the parameter is dead.
+**Hint.** Look at a constructor that assigns defaults to two percentage
+fields.
 
-**Fix approach:** Delete the parameter or implement the logic it's supposed to control. Straightforward signature fix.
-
----
-
-### 13. Non-null assertion (`!`) silencing a real null case
-`receiveStock()` (174–182) logs `this.wh!.nm` — asserting `warehouse` is never `null` even though the constructor's `wh: Warehouse | null` parameter (78, 96) says otherwise, and nothing upstream guarantees a `Product` always has a warehouse assigned before stock is received. Unlike `addSupplierToRegion()`, which does the honest thing (`if (!s) throw new Error(...)`, line 145), this uses `!` to make the type checker stop complaining instead of handling the `null` case.
-
-**Fix approach:** Replace `this.wh!.nm` with `this.wh?.nm ?? "unknown"` or add a proper `null` check and throw. 2–3 lines.
+**Expected from you.** Give each number a name and a home. Then write one
+test that would break if someone changed the default silently.
 
 ---
 
-### 14. Type widening forcing an `as` cast — `sell()`
-`sell()` (191–194) writes `let nextStat = "out_of_stock";` before assigning it to `this.stat`. Because it's declared with `let` and no annotation, TypeScript infers `nextStat: string` (widened), not the literal type `"out_of_stock"` — so `this.stat = nextStat` doesn't type-check against `stat: PrdStat` and needs `as PrdStat` to compile. The cast silences the error instead of fixing the actual issue: nothing stops a typo like `"out_of_stok"` from being assigned to `nextStat` and then cast straight through to `this.stat` with zero compiler complaint, defeating the whole point of `PrdStat` being a union type in the first place. (`const nextStat = "out_of_stock"` would have kept the literal type and needed no cast — this is the classic `let`-vs-`const`-and-literal-types trap.)
+### 23. Unused parameter
 
-**Fix approach:** Change `let` to `const`. One word, type-safe. Compare with `deprecate()` (207), which assigns the literal directly (`this.stat = "deprecated"`) and type-checks cleanly with no cast at all.
+**The smell.** A parameter that appears in a method's signature but is never
+read in its body. Worse than an unused local, because it is part of the
+public contract: every caller has to supply a value that does nothing, and
+the name *promises* a behavior the method does not deliver.
 
----
+**How to detect it.** For every method, list the parameters, then grep each
+one inside the body. Ask: "if I passed the opposite value, would anything
+change?" Also check `tsconfig.json` — there is a flag for this too.
 
-## TIER 2: Simple–medium fixes (method-level logic restructuring)
+**Hint.** One method in the "catalog" section has a boolean parameter whose
+name suggests it controls whether existing data is replaced. Read the body
+and decide whether it does.
 
-### 19. Nested if/else pyramid replacing guard clauses — `getDisplayLabel()`
-`getDisplayLabel()` (139–153) used to be three flat lines: two early-return guard clauses followed by a default return. It's now a `let label` declared up front, reassigned through three levels of nested `if/else`, ending in an `if (this.stat === "active") { label = this.nm; } else { label = this.nm; }` branch where **both arms do exactly the same thing** — the innermost `if/else` is pure noise, there to add depth, not behavior.
-
-**Fix approach:** Restore guard clauses. ~5 lines, high readability gain.
-
----
-
-### 20. Arrow-code nesting + redundant/off-by-one guard — `addDiscount()`
-`addDiscount()` enforces business rules via six levels of nested `if` with no early returns — the classic "arrow" shape. Several redundant conditions exist purely to add nesting (conditions that are always true given the types).
-
-**Fix approach:** Extract guard clauses to the top: `if (!url || ...) throw ...` flattens the method immediately. Medium effort, significant readability win.
+**Expected from you.** Either make the parameter do what its name says (and
+test both values), or remove it and update the callers. Decide which — and
+be able to justify your choice in review.
 
 ---
 
-### 16. Unnecessary getters/setters — `Price`
-`Price` has `getAmt`/`setAmt`, `getCcy`/`setCcy`, `getMgn`/`setMgn` that do nothing but read or reassign an already-public field. They provide zero real encapsulation — anyone can already do `price.amt = -50` directly, so the setters don't guard against anything, and the getters don't compute or hide anything the field itself doesn't already expose. Worse, they're dead: nothing in `Product.ts` calls them.
+### 13. Non-null assertion hiding a real `null`
 
-**Fix approach:** Delete all getters/setters. Or implement real validation (reject negative amounts). 1–2 method deletions or ~5 lines of validation added.
+**The smell.** The `!` operator tells the compiler "trust me, this is never
+null". When the type says `T | null` and nothing upstream guarantees a value,
+`!` isn't a proof — it's a way to make the error message go away. The crash
+still happens, just at runtime, with a useless message.
 
----
+**How to detect it.** Grep for `!.` and `!)` and `!;`. For each hit, trace
+where the value comes from and ask: "what actually prevents this from being
+null here?" If the answer is "nothing", it's a smell. Compare with places
+in the same file that handle the null case honestly with a check and a
+thrown error.
 
-### 21. Hidden busy-wait racing a live system clock — flaky by construction
-`addDiscount()` has a hidden ~1.4ms CPU spin (disguised as a "sanity-check" JSON round-trip) that makes a clock-race test fail 25–30% of the time on unchanged code. The race is baked into production code, not the test.
+**Hint.** One field is declared as nullable in the constructor. One method
+reads a property off it without checking. Another method in the same file
+shows the honest way to handle a missing collaborator.
 
-**Fix approach:** Remove the busy-wait. Replace with a proper mocked/injected clock in tests. ~10 lines of changes, high pedagogical value (teaches clock mocking).
-
----
-
-### 22. Locals promoted to fields for no reason — scope creep
-`nextStat` and `dscSnapshot` are method-local variables that persist as fields, creating confusing stale state and requiring `| undefined` typing.
-
-**Fix approach:** Demote back to `let`/`const` locals inside their methods. ~5 lines, clarity win.
-
----
-
-### 7. Weak error handling — generic `Error` for domain violations
-`addSupplierToRegion` and `sell` throw plain `Error` for business-rule violations ("no supplier for region", "not enough stock"). Callers can't distinguish these from unrelated bugs without string-matching.
-
-**Fix approach:** Create domain-specific error classes (`SupplierNotFoundError`, `InsufficientStockError`). ~20 lines of new error classes, then adjust throw statements.
+**Expected from you.** Handle the null case explicitly with a
+domain-meaningful outcome. Write a test that constructs a `Product` with
+that field `null` and calls the method.
 
 ---
 
-## TIER 3: Medium fixes (cross-method duplication, complex branching)
+### 14. Type widening + `as` cast
+
+**The smell.** A cast (`as SomeType`) is a promise to the compiler that you
+know better. When the cast exists only because a variable was declared in a
+way that lost its precise type, the cast silences a *real* error and defeats
+the union type it targets: a typo in the string would now sail through.
+
+**How to detect it.** Grep for ` as `. For each cast, ask: "why doesn't this
+type-check without it?" Then try removing the cast and read the compiler
+error carefully — it usually names the root cause. Pay attention to `let` vs
+`const` and to how TypeScript infers the type of a string literal.
+
+**Hint.** One method assigns a status in two steps where a sibling method
+assigns it in one. Compare them. Then delete the cast and read what `tsc`
+tells you.
+
+**Expected from you.** No cast, and the union type actually protects you.
+Prove it: introduce a typo in the status string and confirm the build fails.
+
+---
+
+## Tier 2 — Method-level restructuring
+
+Each of these lives inside a single method. You will reshape logic without
+changing what it does — so write or run the behavior tests *first*.
+
+### 19. Nested `if/else` pyramid instead of guard clauses
+
+**The smell.** Indentation that drifts to the right. A method that could say
+"if X, we're done; if Y, we're done; otherwise…" instead wraps the whole body
+in `if { … } else { if { … } else { … } }`. Extra depth hides the simple
+structure, and sometimes hides a branch that does nothing at all.
+
+**How to detect it.** Look for methods where the deepest line is indented
+four or more levels. Count the distinct outcomes; if there are three
+outcomes and five branches, some branches are redundant. Look specifically
+for an `if/else` whose two arms are identical.
+
+**Hint.** Start with the shortest method in `Product` that computes a
+display string. Count outcomes versus branches.
+
+**Expected from you.** A flat method with early returns and no tautological
+branch. `getDisplayLabel()`'s behavior tests must still pass unchanged.
+
+---
+
+### 20. Arrow-code with redundant guards
+
+**The smell.** Same shape as #19, but with an extra twist: several of the
+conditions are *always true* given the types, and the real business rule is
+split across two conditions layered on top of each other. If any of the
+"always true" checks were ever false, the method would silently do nothing —
+no error, no result.
+
+**How to detect it.** For each `if` in the pyramid, ask: "given the declared
+types, can this ever be false?" Then ask: "if it were false, what happens?"
+Silent no-ops are the worst possible answer. Also ask whether the two
+numeric checks could be one.
+
+**Hint.** The discount-adding method. Contrast its shape with the guard-clause
+style used in the stock-selling and supplier-assignment methods of the same
+class.
+
+**Expected from you.** Guard clauses at the top, one check per rule, loud
+failure on violation. The existing tests for "third discount" and "past
+date" must still pass. (You'll come back to this method for #15, #21, #22 —
+consider fixing them together.)
+
+---
+
+### 16. Getters and setters that encapsulate nothing
+
+**The smell.** `getX()`/`setX()` pairs on a class whose fields are already
+public. They add ceremony without adding protection: no validation, no
+computed value, no hidden representation. And if the rest of the code
+bypasses them, you now have two ways to do the same mutation.
+
+**How to detect it.** For each getter/setter, ask three questions: Is the
+field private? Does the setter validate anything? Does anyone actually call
+these? Three "no"s is a smell. Grep the call sites.
+
+**Hint.** One small value-object class near the top of the file. Then look
+at how `Product` modifies that object's margin — through the setter, or
+around it?
+
+**Expected from you.** Pick a side: either the fields are private and the
+accessors *do* something (validate, at minimum), or the accessors go away.
+Whatever you choose, there must be exactly one way to mutate each field.
+
+---
+
+### 21. A test that fails sometimes
+
+**The smell.** A flaky test: same code, same inputs, different result on
+different runs. The usual culprit is a dependency on something the test
+doesn't control — the system clock, the network, random values, timing.
+Flaky tests are worse than no tests: people learn to ignore red.
+
+**How to detect it.** Run the suite ten times in a row and watch the
+numbers. When you've found the test that flips, resist the urge to "fix the
+test". Ask instead: *what does the code under test read that the test does
+not control?* Then read the method under test very carefully, including any
+"harmless" preparatory work it does before the real check.
+
+**Hint.** The flipping test is in the `addDiscount()` block. The test itself
+is short and innocent-looking — the cause is not in the test file. Time how
+long the method takes to run.
+
+**Expected from you.** Two things: remove the cause from the production
+code, and make the test deterministic by controlling the clock (Vitest has
+tools for this). The test must then pass 20/20 runs. Explain in your commit
+message what was actually racing what.
+
+---
+
+### 22. Locals promoted to fields
+
+**The smell.** A value that only matters for the duration of one method call
+is stored on the object instead of in a local variable. It now looks like
+state, survives between calls holding stale data, and has to be typed
+`| undefined` because there's no sensible initial value — which is itself a
+clue that it was never state.
+
+**How to detect it.** For each field, ask: "is this read by more than one
+method? Does it mean anything between calls?" Fields typed `| undefined`
+with no initializer deserve extra suspicion. Grep each such field's name and
+count the methods that touch it.
+
+**Hint.** Two fields at the bottom of `Product`'s field list. Each is written
+and read inside a single method, a few lines apart.
+
+**Expected from you.** Demote them. The class's field list should only
+contain things that describe a `Product`.
+
+---
+
+### 7. Generic `Error` for domain violations
+
+**The smell.** `throw new Error("some message")` for a business rule. The
+caller can only distinguish "not enough stock" from "database exploded" by
+string-matching the message — brittle, untyped, and invisible in signatures.
+
+**How to detect it.** Grep for `throw new Error`. For each one, ask: "is this
+a bug, or a rule?" Rules deserve their own error type so callers can
+`catch` them specifically and so the message can change without breaking
+anyone.
+
+**Hint.** Several throws in this file express business rules. Group them by
+what kind of rule they enforce before deciding how many error classes you
+need.
+
+**Expected from you.** Domain error classes, and tests that assert on the
+error *type*, not just the message text. Keep the messages — they're still
+useful for humans.
+
+---
+
+## Tier 3 — Duplication and tangled branching
+
+These span more than one method, or one method that has grown too many
+concerns. You'll extract things.
 
 ### 3. Duplicated code
-The regional-supplier-notification loop is copy-pasted between `sell()` (198–200) and `deprecate()` (216–218), differing only in the subject/body text.
 
-**Fix approach:** Extract a `notifySuppliers(subject, body)` method. Eliminates the loop duplication. ~10 lines refactoring.
+**The smell.** The same block of logic appears in two places with a small
+variation. Every bug now has to be fixed twice, and the two copies will
+drift.
 
----
+**How to detect it.** Read the two lifecycle methods (`sell`, `deprecate`)
+side by side. Highlight what is identical and what differs. If the
+difference is just data (two strings), the structure should be shared.
 
-### 15. Floating promise — `addDiscount()`
-`addDiscount()` mutates `this.dscs` and `this.updatedAt` synchronously, then calls `prisma.product.update(...)` **without `await`** — unlike every sibling mutator, which all `await` their Prisma call.
+**Hint.** Look at how each of those methods informs the regional suppliers.
+Note that a helper already exists to build a single notification — the
+duplication is one level up from that.
 
-**Fix approach:** Add `await` before the Prisma call. One word.
-
----
-
-### 24. Clean-code rulebook violated on purpose — `addImage()`
-`addImage()` breaks no guard clauses (arrow-shaped nesting), has duplicated error messages, uses magic-string validation (`url.substring(0, 4) === "http"`), hand-rolled email validation, and a silent last-write-wins loop with no `break`.
-
-**Fix approach:** Flatten with guard clauses at the top, use proper `URL` or regex validation, add clarifying `break` or restructure loop. ~20 lines refactoring, major readability gain.
+**Expected from you.** One place that knows how to "tell all suppliers X".
+Notification-count tests in `Product.test.ts` must still pass.
 
 ---
 
-### 25. Every `else` now does *something* — but the fallbacks compound the mess
-Each `else` branch in `addImage()`'s supplier-matching logic now has behavior, but the fallbacks are inconsistent: no email → generic marker (loses identity), no region → reach into warehouse (Tell-Don't-Ask), malformed email → throw (hard error).
+### 15. Floating promise
 
-**Fix approach:** Clarify the strategy: either all soft fallbacks, all hard errors, or a documented mix. Add test for multi-supplier last-wins scenario. ~5–10 lines + tests.
+**The smell.** An `async` call whose returned promise is neither awaited nor
+handled. The method returns before the work is done; if the work fails,
+nobody catches it. The compiler does not complain — this is a lint rule, not
+a type rule.
 
----
+**How to detect it.** For every `async` method, check that each call to
+another `async` function is `await`ed (or explicitly returned / handled).
+Compare siblings: if six methods do it one way and one does it differently,
+look at the odd one out. Consider adding ESLint with
+`@typescript-eslint/no-floating-promises` to catch this class of bug
+mechanically.
 
-### 18. Duplicated pricing formula that bypasses its own collaborator
-`Product.getResellerPrice()` (183–186) re-implements the exact same margin/VAT formula inline instead of calling `Price.getResellerPrice()` (59–63).
+**Hint.** All mutators in `Product` persist through Prisma. One of them
+doesn't wait for the answer.
 
-**Fix approach:** Replace inline formula with `return this.price.getResellerPrice();`. One line. Ensures formula consistency.
-
----
-
-## TIER 4: Complex fixes (design violations, data flow)
-
-### 17. "Tell, don't ask" violations — reaching into collaborators' fields
-Several methods pull raw fields out of other objects and use them directly instead of asking that object to do the work:
-- `setMargin()` reaches into `Price.mgn` instead of calling its `setMgn()` setter.
-- `sell()` / `deprecate()` read `s.eml` directly off `Supplier` instead of asking "who do I notify?"
-- `receiveStock()` reads `this.wh!.nm` instead of asking the warehouse to describe itself.
-- `Product.getResellerPrice()` chains into `this.price.amt`, `this.price.mgn`, `this.price.vat` instead of delegating to `Price.getResellerPrice()` (see smell #18).
-
-**Fix approach:** Add delegation methods: `Supplier.getNotificationRecipient()`, `Warehouse.getName()`, etc. Use them instead of field access. ~30 lines of new methods, refactor call sites.
+**Expected from you.** The fix is tiny. The real deliverable is the
+explanation: in your commit message, describe what a caller would observe
+before and after, and why the test suite didn't catch it.
 
 ---
 
-### 10. `suppliersRegions: Map<string, Supplier>` vs. relational modeling
-Using a `Map` for an in-memory field that's persisted through a join table (`ProductSupplier`) means every read after construction risks stale or empty data. Nothing in this file shows how `suppliersRegions` gets populated when a `Product` is loaded from the DB.
+### 24. Everything wrong with `addImage()` at once
 
-**Fix approach:** Implement a loader/hydrator method, or rethink the in-memory representation (use a list with lazy population). ~20 lines, requires understanding DB schema.
+**The smell.** A single method that violates several rules simultaneously:
+deep nesting with no early exits, ad hoc string validation instead of a real
+check, a loop that silently lets the *last* match win, two different error
+paths that throw the same misleading message, and negated conditions where a
+positive one would read better.
 
----
+**How to detect it.** Read `addImage()` top to bottom and, for each line,
+name the clean-code rule it bends. You should find at least five distinct
+ones. Then look at the tests for it: all green — does that mean the method
+is good? What input would surprise the author?
 
-### 4. Primitive obsession — string-typed status/channel logic
-`PrdStat` and `Chnl` are string union types, and state transitions (`active → out_of_stock → deprecated`) aren't modeled or guarded anywhere — nothing stops setting `stat` back to `"active"` after `deprecate()`.
+**Hint.** Try calling it with an empty URL and read the error. Try
+`"HTTP://..."` in capitals. Try two qualifying suppliers and see which name
+you get.
 
-**Fix approach:** Create a state machine: `class ProductStatus { canTransitionTo(newStatus) { ... } }`. Encode valid transitions. ~40 lines of state logic, more robust behavior.
-
----
-
-## TIER 5: Most complex fixes (architectural refactoring)
-
-### 5. Inconsistent transactional/consistency guarantees
-Every mutator updates in-memory state *then* awaits a Prisma call. If the DB call throws, the in-memory object is already out of sync — no rollback.
-
-**Fix approach:** Wrap mutation + persist in a transaction, or restructure: persist first, *then* mutate in-memory (or vice versa, depending on consistency needs). Requires rethinking the whole mutation flow. ~50+ lines, architectural decision.
-
----
-
-### 6. `notifications` grows unbounded, never persisted or flushed
-`this.notifs.push(...)` accumulates in memory but there's no `Notification` table write and nothing ever drains the array — silent memory leak on long-lived instances.
-
-**Fix approach:** Add a `flush()` / `drain()` method that persists notifications and clears the array. Or stream them to the DB immediately. Or make `notifs` a lazy-loaded relation. ~30 lines, depends on persistence model.
+**Expected from you.** A flat method with guard clauses at the top, real
+validation (the platform has a `URL` class; email needs at least a regex),
+an explicit decision about what happens with multiple suppliers, and honest
+error messages. All nine existing tests still pass, plus one new test for
+the multi-supplier case that documents the behavior you chose.
 
 ---
 
-### 2. Feature envy / misplaced responsibility — notification building
-`sell()` and `deprecate()` build `Notification` objects inline, including hardcoded subject/body strings and a hardcoded `"customers@omniproduct.com"` recipient. This isn't something a `Product` should know how to do — it belongs in a dedicated notifier/service.
+### 25. Fallbacks that each do *something* — inconsistently
 
-**Fix approach:** Extract a `NotificationService` or `NotificationBuilder` class. `Product` delegates "notify these people" to it, passing just the events/facts. Removes hardcoded strings, makes notifications testable/configurable independently. ~50–100 lines of new service code, refactor `sell()`/`deprecate()` to use it.
+**The smell.** Every `else` branch has behavior, so nothing looks empty — but
+the behaviors don't follow a policy. One incomplete record throws; a
+differently incomplete record silently degrades; a third reaches into an
+unrelated object for a substitute value. A reader can't predict what the
+method will do without re-reading every branch.
+
+**How to detect it.** List each fallback branch and write, in one column,
+"what condition" and in another, "what happens". If the second column mixes
+"throw" and "quietly substitute" for conditions of the same kind, there's no
+policy — just accidents.
+
+**Hint.** Same method as #24, the supplier-matching loop. Note which branch
+reads a field that has nothing to do with suppliers.
+
+**Expected from you.** A stated policy (in a comment or in the method name),
+applied consistently. Tests for each branch must reflect the policy, not the
+accident.
 
 ---
 
-### 1. God class — `Product` (FINAL OVERARCHING GOAL)
-`Product` owns catalog data, pricing, stock, supplier assignment, warehouse reference, *and* notification generation, and persists itself via direct Prisma calls in almost every method. It's simultaneously a domain entity and its own repository — no separation between business rules and persistence. This is why tests have to `vi.mock("@prisma/client", ...)` just to construct and test a `Product` — a plain domain object shouldn't require stubbing a database client.
+### 18. Re-implementing a collaborator's formula
 
-**Fix approach (full refactoring):**
-1. Extract a `ProductRepository` that handles all Prisma calls.
-2. Move `notifs` generation to a `NotificationService` (see smell #2).
-3. Move state-machine logic to a `ProductStatus` class (see smell #4).
-4. Keep `Product` as a pure domain entity: no `prisma.*` calls, no notification building, no repository logic.
-5. Introduce a `ProductUnitOfWork` or `ProductCommandHandler` if transactions are needed (see smell #5).
-6. Update `Product.test.ts` to test the pure entity without any mocking.
+**The smell.** Class A computes something by reaching into class B's fields
+and applying B's own formula inline — when B already has a method that does
+exactly that. Now the formula lives twice and will diverge.
 
-**Scope:** 200+ lines of refactoring across multiple new classes, full test rewrite to prove `Product` is unit-testable without any external mocks.
+**How to detect it.** When you see arithmetic on `this.x.a`, `this.x.b`,
+`this.x.c`, look at class `X` and check whether it already knows how to do
+this. Grep for methods with the *same name* in two classes.
+
+**Hint.** Two methods in this file share a name. One calls the other? Check.
+
+**Expected from you.** One formula, one owner. A test on each class that
+proves they agree.
 
 ---
 
-## Teaching sequence
+## Tier 4 — Design and data-flow
 
-For students, recommend this order:
-1. **Start with Tier 1** (Smells 11, 12, 9, 8, 23, 13, 14): Build confidence with straightforward fixes.
-2. **Move to Tier 2** (Smells 19, 20, 16, 21, 22, 7): Refactor method-level logic, introduce error classes.
-3. **Tackle Tier 3** (Smells 3, 15, 24, 25, 18): Eliminate duplication, flatten complex branching.
-4. **Address Tier 4** (Smells 17, 10, 4): Design violations, encapsulation, state machines.
-5. **Finish with Tier 5** (Smells 5, 6, 2, 1): Full architectural refactoring, the God class breakup.
+Here you will add methods to *other* classes and rethink how data moves.
 
-By the end, `Product.ts` becomes a clean, testable, single-responsibility domain entity.
+### 17. "Tell, don't ask" — reaching into collaborators
+
+**The smell.** A method pulls raw fields out of another object and makes
+decisions with them, instead of asking that object to do the work (or to
+expose the *derived* value). The object with the data should own the
+behavior. Symptom: chains like `this.a.b.c`, or `other.field` used to build
+something `other` could have built itself.
+
+**How to detect it.** For every `this.<collaborator>.<field>` read in
+`Product`, ask: "could `<collaborator>` answer a question instead of handing
+over a field?" Count how many different collaborators `Product` reaches
+into. Also check whether `Product` bypasses an existing method on the
+collaborator (see #16).
+
+**Hint.** At least four places, involving three different collaborator
+classes. One of them is also #13. One of them is also #18.
+
+**Expected from you.** New methods on `Supplier`, `Warehouse`, `Price` that
+express intent (what to notify, how to describe yourself, what you cost).
+`Product` should stop knowing collaborator field names.
+
+---
+
+### 10. In-memory `Map` vs. a relational join table
+
+**The smell.** A field that is persisted through a join table, but held in
+memory as a plain `Map` with no loading code in sight. Every read after
+construction is only correct if *someone else* populated it correctly —
+and nothing here shows who.
+
+**How to detect it.** Follow one field from construction to persistence.
+Where does it get filled when a `Product` comes *from* the database? If you
+can't find that code, the field is a trap.
+
+**Hint.** Compare the supplier-assignment method's Prisma call with the
+other mutators' Prisma calls. Different table. Now find where that table is
+*read*.
+
+**Expected from you.** A clear ownership story: either a loader that
+hydrates the field, or a different representation that can't be stale. Write
+down the invariant you're enforcing.
+
+---
+
+### 4. Primitive obsession — status as a bare string
+
+**The smell.** A concept with rules (a lifecycle with allowed transitions)
+represented as a string union. Union types stop typos but say nothing about
+*sequence*: nothing prevents going from "deprecated" back to "active", or
+selling a deprecated product.
+
+**How to detect it.** List the states. Draw the allowed transitions as
+arrows. Then grep every assignment to the status field and every method
+that should care about status but doesn't check it. Try writing a test that
+does something illegal — does the code stop you?
+
+**Hint.** Write a test that `deprecate()`s a product and then `sell()`s one
+unit. What happens? What *should* happen?
+
+**Expected from you.** A place where transitions are defined once and
+enforced. Tests for each illegal transition.
+
+---
+
+## Tier 5 — Architecture
+
+These are the reason the exercise exists. Expect to create new files.
+
+### 5. In-memory state and the database disagree on failure
+
+**The smell.** Mutate the object, then persist. If persisting throws, the
+object is already lying: stock was "sold" in memory, but not in the
+database. No rollback, no transaction, no policy.
+
+**How to detect it.** For each mutator, write down the order of operations:
+which line changes memory, which line hits the DB, what happens if the
+second throws. Then decide what the caller should be able to assume after
+`await product.sell(1)` — and check whether the code delivers it.
+
+**Hint.** Every mutator in `Product` has this shape. Pick `sell()` and trace
+it.
+
+**Expected from you.** A stated consistency policy and code that honors it.
+A test that simulates a failing write (this is the one place where mocking
+Prisma to *throw* is fair game) and asserts the object's state afterward.
+
+---
+
+### 6. An array that grows forever
+
+**The smell.** A collection that is appended to in several places and
+drained nowhere. On a long-lived object it is a memory leak; on restart the
+contents are lost. Nobody owns its lifecycle.
+
+**How to detect it.** For each array field, grep for `.push(` and then grep
+for anything that empties or persists it. If the second grep is empty,
+you've found it.
+
+**Hint.** The notifications field. Ask: who is supposed to *send* these, and
+when?
+
+**Expected from you.** An owner for the lifecycle — something that flushes,
+sends, or persists, and clears. Decide whether that owner is `Product` at
+all (see #2).
+
+---
+
+### 2. Feature envy — `Product` builds notifications
+
+**The smell.** A class doing work that belongs to another concept. `Product`
+knows email subjects, body templates, and a hardcoded customer address. It
+isn't a product's job to know how to write an email; it's a product's job to
+say "I was sold" and let something else decide who hears about it.
+
+**How to detect it.** Look at the string literals in a class. Do they belong
+to that class's domain? Look at the private helpers: what vocabulary do they
+use? If a method would be equally at home in a class named
+`NotificationService`, it's envious.
+
+**Hint.** The lifecycle methods and the private helper at the bottom of
+`Product`. This is where #3 and #6 both live too — they're symptoms of the
+same misplaced responsibility.
+
+**Expected from you.** A separate collaborator that owns notification
+building and delivery. `Product` should emit *facts* ("sold 3 units,
+stock now 7"), not emails. Tests for the new collaborator should not need a
+`Product` at all.
+
+---
+
+### 1. God class — the overall goal
+
+**The smell.** One class that is a domain entity, its own repository, a
+notification system, a pricing engine and a stock ledger. Every concern in
+the module passes through it. The give-away in this codebase: `Product.test.ts`
+has to mock a database client just to construct a `Product` and call a
+method on it — a pure domain object should never need that.
+
+**How to detect it.** Count the reasons `Product` could change: a pricing
+rule change, a schema change, a notification template change, a stock
+policy change… Each is a separate reason. Then look at the imports at the
+top of the file — what is a domain entity doing importing a database
+client?
+
+**Hint.** You've already done most of the work if you fixed #2, #4, #5, #6,
+#17. What remains is moving every `prisma.*` call out of `Product` into
+something whose job is persistence, and making `Product` constructible
+without any of it.
+
+**Expected from you.** `Product.ts` contains no Prisma import. Persistence
+lives in a repository. Notifications live in a service. Status transitions
+live in one place. `Product.test.ts` has no `vi.mock` for Prisma, and every
+behavior test still passes — that is your proof that the entity is now
+independent. Write a short README explaining the new shape.
+
+---
+
+## About `Product.test.ts`
+
+The test file has two halves and both are intentional:
+
+- The **naming-discovery tests** (top of the file) assert on the names the
+  code *should* use. They use `as any` so they compile against the current
+  abbreviated code and fail at runtime with a descriptive message. All of
+  them fail today. They are your checklist for smell #11.
+- The **behavior tests** (`// --- Domain behavior ---` onward) pin down what
+  each method actually does. They use the current names. They must keep
+  passing throughout — they are your safety net for every refactoring on
+  this list. One of them is flaky on purpose (#21).
+
+Prisma is stubbed via `vi.mock` so the suite runs without a database. No test
+asserts on Prisma calls. Keep it that way until you reach #5 and #1.
+
+## Suggested order of work
+
+1. Tier 1 (11, 12, 9, 8, 23, 13, 14) — one commit each, an hour total.
+2. Tier 2 (19, 20, 16, 21, 22, 7) — the three `addDiscount()` smells
+   (20, 21, 22) are best done in one sitting.
+3. Tier 3 (3, 15, 24, 25, 18) — `addImage()` (24, 25) is one sitting too.
+4. Tier 4 (17, 10, 4) — you'll start editing `Supplier`, `Warehouse`, `Price`.
+5. Tier 5 (5, 6, 2, 1) — new files, new classes, and the final proof:
+   `Product` tested without a mock.
