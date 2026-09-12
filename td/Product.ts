@@ -15,7 +15,7 @@ const prisma = new PrismaClient();
 export type Chnl = "email" | "sms" | "push";
 export type PrdStat = "active" | "out_of_stock" | "deprecated";
 
-export interface Notif {
+export interface Notification {
   id: string;
   recip: string;
   subj: string;
@@ -25,7 +25,7 @@ export interface Notif {
   prdId?: string;
 }
 
-export class Splr {
+export class Supplier {
   constructor(
     public id: string,
     public nm: string,
@@ -34,7 +34,7 @@ export class Splr {
   ) {}
 }
 
-export class Wh {
+export class Warehouse {
   constructor(
     public id: string,
     public nm: string,
@@ -65,92 +65,92 @@ export class Price {
 
 export class Product {
   id: string;
-  name: string;
-  slug: string;
+  nm: string;
+  slg: string;
   price: Price;
-  discounts: string[];
-  images: Record<string, string>; // key = context ("thumbnail", "hero", ...), value = url
-  suppliersRegions: Map<string, Supplier>; // key = region
-  weight: number;
-  dimensions: string;
-  quantity: number;
-  stock: number;
-  warehouse: Warehouse | null;
-  status: ProductStatus;
+  dscs: string[];
+  imgs: Record<string, string>; // key = context ("thumbnail", "hero", ...), value = url
+  splrRgns: Map<string, Supplier>; // key = region
+  wgt: number;
+  dims: string;
+  qty: number;
+  stk: number;
+  wh: Warehouse | null;
+  stat: PrdStat;
   createdAt: Date;
   updatedAt: Date;
-  notifications: Notification[] = [];
+  notifs: Notification[] = [];
 
   constructor(
     id: string,
-    name: string,
-    slug: string,
+    nm: string,
+    slg: string,
     price: Price,
-    discounts: string[],
-    images: Record<string, string>,
-    suppliersRegions: Map<string, Supplier>,
-    weight: number,
-    dimensions: string,
-    quantity: number,
-    stock: number,
-    warehouse: Warehouse | null,
+    dscs: string[],
+    imgs: Record<string, string>,
+    splrRgns: Map<string, Supplier>,
+    wgt: number,
+    dims: string,
+    qty: number,
+    stk: number,
+    wh: Warehouse | null,
   ) {
     this.id = id;
-    this.name = name;
-    this.slug = slug;
+    this.nm = nm;
+    this.slg = slg;
     this.price = price;
-    this.discounts = discounts;
-    this.images = images;
-    this.suppliersRegions = suppliersRegions;
-    this.weight = weight;
-    this.dimensions = dimensions;
-    this.quantity = quantity;
-    this.stock = stock;
-    this.warehouse = warehouse;
-    this.status = "active";
+    this.dscs = dscs;
+    this.imgs = imgs;
+    this.splrRgns = splrRgns;
+    this.wgt = wgt;
+    this.dims = dims;
+    this.qty = qty;
+    this.stk = stk;
+    this.wh = wh;
+    this.stat = "active";
     this.createdAt = new Date();
     this.updatedAt = new Date();
   }
 
   getDisplayLabel(): string {
-    if (this.status === "deprecated") return `[DISCONTINUED] ${this.name}`;
-    if (this.stock === 0) return `[OUT OF STOCK] ${this.name}`;
-    return this.name;
+    if (this.stat === "deprecated") return `[DISCONTINUED] ${this.nm}`;
+    if (this.stk === 0) return `[OUT OF STOCK] ${this.nm}`;
+    return this.nm;
   }
 
   // --- Catalog / images / discounts ---
 
-  async addImage(context: string, url: string): Promise<void> {
-    this.images[context] = url;
+  async addImage(ctx: string, url: string): Promise<void> {
+    this.imgs[ctx] = url;
     this.updatedAt = new Date();
     await prisma.product.update({
       where: { id: this.id },
-      data: { images: this.images as Prisma.InputJsonValue, updatedAt: this.updatedAt },
+      data: { images: this.imgs as Prisma.InputJsonValue, updatedAt: this.updatedAt },
     });
   }
 
-  async addDiscount(discountCode: string): Promise<void> {
-    this.discounts.push(discountCode);
+  async addDiscount(dscCode: string): Promise<void> {
+    this.dscs.push(dscCode);
     this.updatedAt = new Date();
     await prisma.product.update({
       where: { id: this.id },
-      data: { discounts: this.discounts, updatedAt: this.updatedAt },
+      data: { discounts: this.dscs, updatedAt: this.updatedAt },
     });
   }
 
   // --- Suppliers ---
 
-  async addSupplierToRegion(region: string, suppliers: Supplier[]): Promise<void> {
-    const supplier = suppliers.find((s) => s.region === region);
-    if (!supplier) throw new Error(`No supplier found for region ${region}`);
+  async addSupplierToRegion(rgn: string, splrs: Supplier[]): Promise<void> {
+    const s = splrs.find((x) => x.rgn === rgn);
+    if (!s) throw new Error(`No supplier found for region ${rgn}`);
 
-    this.suppliersRegions.set(region, supplier);
+    this.splrRgns.set(rgn, s);
     this.updatedAt = new Date();
 
     await prisma.productSupplier.upsert({
-      where: { productId_region: { productId: this.id, region } },
-      create: { productId: this.id, region, supplierId: supplier.id },
-      update: { supplierId: supplier.id },
+      where: { productId_region: { productId: this.id, region: rgn } },
+      create: { productId: this.id, region: rgn, supplierId: s.id },
+      update: { supplierId: s.id },
     });
   }
 
@@ -160,88 +160,77 @@ export class Product {
     return this.price.getResellerPrice();
   }
 
-  async setMargin(marginPercent: number): Promise<void> {
-    this.price.margin = marginPercent;
+  async setMargin(mgnPct: number): Promise<void> {
+    this.price.mgn = mgnPct;
     this.updatedAt = new Date();
     await prisma.product.update({
       where: { id: this.id },
-      data: { priceMargin: marginPercent, updatedAt: this.updatedAt },
+      data: { priceMargin: mgnPct, updatedAt: this.updatedAt },
     });
   }
 
   // --- Stock ---
 
-  async receiveStock(quantity: number): Promise<void> {
-    this.stock += quantity;
-    this.quantity += quantity;
+  async receiveStock(qty: number): Promise<void> {
+    this.stk += qty;
+    this.qty += qty;
     this.updatedAt = new Date();
     await prisma.product.update({
       where: { id: this.id },
-      data: { stock: this.stock, quantity: this.quantity, updatedAt: this.updatedAt },
+      data: { stock: this.stk, quantity: this.qty, updatedAt: this.updatedAt },
     });
   }
 
-  async sell(quantity: number): Promise<void> {
-    if (this.stock < quantity) throw new Error("Not enough stock");
+  async sell(qty: number): Promise<void> {
+    if (this.stk < qty) throw new Error("Not enough stock");
 
-    this.stock -= quantity;
+    this.stk -= qty;
     this.updatedAt = new Date();
 
-    if (this.stock === 0) this.status = "out_of_stock";
+    if (this.stk === 0) this.stat = "out_of_stock";
 
     await prisma.product.update({
       where: { id: this.id },
-      data: { stock: this.stock, status: this.status, updatedAt: this.updatedAt },
+      data: { stock: this.stk, status: this.stat, updatedAt: this.updatedAt },
     });
 
     // Notify all regional suppliers
-    for (const [, supplier] of this.suppliersRegions) {
-      this.notifications.push({
-        id: crypto.randomUUID(),
-        recipient: supplier.email,
-        subject: `Product sold: ${this.name}`,
-        body: `${quantity} unit(s) of ${this.name} were sold. Remaining stock: ${this.stock}.`,
-        channel: "email",
-        sentAt: new Date(),
-        productId: this.id,
-      });
+    for (const [, s] of this.splrRgns) {
+      this.notifs.push(this.mkNotif(s.eml, `Product sold: ${this.nm}`, `${qty} unit(s) of ${this.nm} were sold. Remaining stock: ${this.stk}.`));
     }
   }
 
   // --- Lifecycle ---
 
   async deprecate(): Promise<void> {
-    this.status = "deprecated";
-    this.stock = 0;
+    this.stat = "deprecated";
+    this.stk = 0;
     this.updatedAt = new Date();
 
     await prisma.product.update({
       where: { id: this.id },
-      data: { status: this.status, stock: this.stock, updatedAt: this.updatedAt },
+      data: { status: this.stat, stock: this.stk, updatedAt: this.updatedAt },
     });
 
     // Notify all regional suppliers
-    for (const [, supplier] of this.suppliersRegions) {
-      this.notifications.push({
-        id: crypto.randomUUID(),
-        recipient: supplier.email,
-        subject: `Product deprecated: ${this.name}`,
-        body: `The product ${this.name} has been deprecated and removed from the catalog.`,
-        channel: "email",
-        sentAt: new Date(),
-        productId: this.id,
-      });
+    for (const [, s] of this.splrRgns) {
+      this.notifs.push(this.mkNotif(s.eml, `Product deprecated: ${this.nm}`, `The product ${this.nm} has been deprecated and removed from the catalog.`));
     }
 
     // Notify customers
-    this.notifications.push({
+    this.notifs.push(this.mkNotif("customers@omniproduct.com", `Product no longer available: ${this.nm}`, `${this.nm} is no longer available.`));
+  }
+
+  // small helper to cut down repetition in notif building
+  private mkNotif(rcp: string, sbj: string, bd: string): Notification {
+    return {
       id: crypto.randomUUID(),
-      recipient: "customers@omniproduct.com",
-      subject: `Product no longer available: ${this.name}`,
-      body: `${this.name} is no longer available.`,
-      channel: "email",
+      recip: rcp,
+      subj: sbj,
+      bod: bd,
+      chnl: "email",
       sentAt: new Date(),
-      productId: this.id,
-    });
+      prdId: this.id,
+    };
   }
 }

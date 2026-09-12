@@ -84,6 +84,21 @@ correctly rehydrated — but nothing in this file shows how `suppliersRegions`
 gets populated when a `Product` is loaded from the DB (no `findUnique`/
 mapping code present here), so the map risks silently being stale or empty.
 
+## 11. Cryptic abbreviations everywhere — naming smell
+
+Most identifiers in the file are abbreviated to the point of requiring
+guesswork, even though class/interface names stayed full (`Supplier`,
+`Warehouse`, `Notification`): type aliases (`Chnl`, `PrdStat`), fields (`nm`,
+`slg`, `dscs`, `imgs`, `splrRgns`, `wgt`, `dims`, `qty`, `stk`, `stat`,
+`notifs`), interface members (`Notification.recip/subj/bod/chnl/prdId`), and
+params (`ctx`, `dscCode`, `rgn`, `mgnPct`). None of these save meaningful
+typing effort over the full word, but they cost every reader a mental
+lookup/disambiguation pass (is `stat` status or statistics? `dscs` discounts
+or descriptions?). It's also internally inconsistent — type/class names are
+spelled out while the fields and params of those same types are abbreviated
+(`class Supplier { nm, eml, rgn }`), so there's no single rule a reader can
+learn and apply.
+
 ## Carried over from the C# original (worth flagging in review even though "fixed")
 
 - `fromCsharp/Models/Product.cs` had an intentional bug: `AddDiscount` (158–164)
