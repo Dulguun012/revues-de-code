@@ -195,7 +195,7 @@ export class Product {
     });
 
     // Notify all regional suppliers
-    for (const [, s] of this.splrRgns) {
+    for (const [rgn, s] of this.splrRgns) {
       this.notifs.push(this.mkNotif(s.eml, `Product sold: ${this.nm}`, `${qty} unit(s) of ${this.nm} were sold. Remaining stock: ${this.stk}.`));
     }
   }

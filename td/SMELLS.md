@@ -108,6 +108,19 @@ spelled out while the fields and params of those same types are abbreviated
 (`class Supplier { nm, eml, rgn }`), so there's no single rule a reader can
 learn and apply.
 
+## 12. Unused variable — `sell()`'s supplier loop
+
+`sell()`'s regional-supplier loop (198) destructures `for (const [rgn, s] of
+this.splrRgns)` but never reads `rgn` — the region key is bound and then
+silently ignored. This is intentionally left uncatchable by the build:
+`tsconfig.json` doesn't set `noUnusedLocals`/`noUnusedParameters`, so
+`tsc --noEmit` stays silent and there's no ESLint config in `td/` either —
+students have to actually read the loop body to notice `rgn` is dead, not
+rely on the compiler to point at it. `deprecate()`'s equivalent loop at 216
+still uses the blank-slot form (`for (const [, s] of ...)`), so the two
+loops are now also inconsistent with each other in addition to being
+duplicated (see smell #3).
+
 ## `Product.test.ts` — deliberate design, not a smell
 
 Worth calling out explicitly in review so it isn't mistaken for an
