@@ -10,44 +10,53 @@ reference, *and* notification generation, and persists itself via direct
 `prisma.product.update()` calls in almost every method (`addImage`,
 `addDiscount`, `addSupplierToRegion`, `setMargin`, `receiveStock`, `sell`,
 `deprecate`). It's simultaneously a domain entity and its own repository —
-no separation between business rules and persistence. (lines 66–247)
+no separation between business rules and persistence. (lines 66–236)
+
+This is also why `Product.test.ts` has to `vi.mock("@prisma/client", ...)`
+just to construct a `Product` and call its behavior methods in a test — a
+plain domain object shouldn't require stubbing a database client to be
+unit-testable at all. That coupling is a direct symptom of this smell, not
+a separate testing concern.
 
 ## 2. Feature envy / misplaced responsibility — notification building
 
-`sell()` (184–209) and `deprecate()` (213–246) build `Notification` objects
-inline, including hardcoded subject/body strings and a hardcoded
-`"customers@omniproduct.com"` recipient (239). This isn't something a
-`Product` should know how to do — it's duplicated across two methods and
-belongs in a dedicated notifier/service.
+`sell()` (184–201) and `deprecate()` (205–222) build `Notification` objects
+inline (via the shared `mkNotif` helper, 225–235), including hardcoded
+subject/body strings and a hardcoded `"customers@omniproduct.com"` recipient
+(221). This isn't something a `Product` should know how to do — it belongs
+in a dedicated notifier/service.
 
 ## 3. Duplicated code
 
 The regional-supplier-notification loop is copy-pasted between `sell()`
-(198–208) and `deprecate()` (224–234), differing only in the subject/body
-text. Same shape, same bug surface twice.
+(198–200) and `deprecate()` (216–218), differing only in the subject/body
+text passed to `mkNotif`. `mkNotif` itself reduces the duplication in
+*building* each `Notification` object, but the *looping over suppliers* is
+still duplicated verbatim in both methods — same shape, same bug surface
+twice.
 
 ## 4. Primitive obsession — string-typed status/channel logic
 
-`ProductStatus` and `Channel` are string union types, and `getDisplayLabel()`
+`PrdStat` and `Chnl` are string union types, and `getDisplayLabel()`
 (115–119) and `sell()`/`deprecate()` branch on string comparisons
-(`this.status === "deprecated"`, `this.stock === 0`). Fine as literal types,
-but state transitions (`active → out_of_stock → deprecated`) aren't modeled
-or guarded anywhere — nothing stops setting `status` back to `"active"` after
-`deprecate()`, and `sell()` never checks `status !== "deprecated"` before
+(`this.stat === "deprecated"`, `this.stk === 0`). Fine as literal types, but
+state transitions (`active → out_of_stock → deprecated`) aren't modeled or
+guarded anywhere — nothing stops setting `stat` back to `"active"` after
+`deprecate()`, and `sell()` never checks `stat !== "deprecated"` before
 selling.
 
 ## 5. Inconsistent transactional/consistency guarantees
 
 Every mutator updates in-memory state *then* awaits a `prisma...update()`
 call. If the DB call throws, the in-memory object is already out of sync
-with the DB (e.g. `stock` decremented in `sell()` at line 187 before the
+with the DB (e.g. `stk` decremented in `sell()` at line 187 before the
 `await` at 192 — a failed write leaves the object claiming stock was sold).
 No rollback, no transaction wrapping.
 
 ## 6. `notifications` grows unbounded, never persisted or flushed
 
-`this.notifications.push(...)` accumulates in memory across `sell()` and
-`deprecate()` calls (82, 199, 225, 237) but there's no `Notification` table
+`this.notifs.push(...)` accumulates in memory across `sell()` and
+`deprecate()` calls (199, 217, 221) but there's no `Notification` table
 write and nothing ever drains the array — it's a silent memory leak on any
 long-lived `Product` instance, and notifications are lost if the process
 restarts.
@@ -70,7 +79,7 @@ every product.
 The file-level comment (lines 1–9) explains that the C# version's dual
 representation (`SyncEfColumns`/`HydrateFromEfColumns`) is "gone" — true for
 storage, but the class still exhibits the same class of problem in miniature:
-`Price` is a plain object with public mutable fields (`margin`, `vat` set
+`Price` is a plain object with public mutable fields (`mgn`, `vat` set
 directly at 164, 187) that the containing `Product` must remember to persist
 manually on every mutation; there's no single source of truth enforced by
 the type system, just discipline.
@@ -98,6 +107,24 @@ or descriptions?). It's also internally inconsistent — type/class names are
 spelled out while the fields and params of those same types are abbreviated
 (`class Supplier { nm, eml, rgn }`), so there's no single rule a reader can
 learn and apply.
+
+## `Product.test.ts` — deliberate design, not a smell
+
+Worth calling out explicitly in review so it isn't mistaken for an
+oversight: `Product.test.ts` asserts against the *proper, non-abbreviated*
+names (`amount`, `name`, `email`, `region`, `suppliersRegions`, `recipient`,
+`subject`, `body`, `channel`, `productId`, ...) rather than the current
+abbreviated ones. Every access goes through an `as any` cast so the file
+still compiles against today's abbreviated `Product.ts` — the naming issue
+surfaces as a failing runtime assertion with a descriptive message, not a
+compiler error, which is what makes it useful as a students' checklist for
+fixing smell #11.
+
+The suite also stubs `@prisma/client` via `vi.mock` purely so importing
+`Product.ts` and calling `sell()`/`deprecate()` doesn't require a live
+database connection (see smell #1). By design, the tests must not assert
+that `prisma.product.update`/`upsert` was called, nor check any persisted
+state — they exercise only in-memory behavior and naming, not persistence.
 
 ## Carried over from the C# original (worth flagging in review even though "fixed")
 
