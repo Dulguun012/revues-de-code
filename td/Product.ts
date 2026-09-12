@@ -12,54 +12,54 @@ import { PrismaClient, Prisma } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-export type Channel = "email" | "sms" | "push";
-export type ProductStatus = "active" | "out_of_stock" | "deprecated";
+export type Chnl = "email" | "sms" | "push";
+export type PrdStat = "active" | "out_of_stock" | "deprecated";
 
-export interface Notification {
+export interface Notif {
   id: string;
-  recipient: string;
-  subject: string;
-  body: string;
-  channel: Channel;
+  recip: string;
+  subj: string;
+  bod: string;
+  chnl: Chnl;
   sentAt: Date;
-  productId?: string;
+  prdId?: string;
 }
 
-export class Supplier {
+export class Splr {
   constructor(
     public id: string,
-    public name: string,
-    public email: string,
-    public region: string,
+    public nm: string,
+    public eml: string,
+    public rgn: string,
   ) {}
 }
 
-export class Warehouse {
+export class Wh {
   constructor(
     public id: string,
-    public name: string,
-    public address: string,
-    public region: string,
+    public nm: string,
+    public addr: string,
+    public rgn: string,
   ) {}
 }
 
 export class Price {
-  amount: number;
-  currency: string;
-  margin: number; // percentage
+  amt: number;
+  ccy: string;
+  mgn: number; // percentage
   vat: number; // percentage, applied on margin only
 
-  constructor(amount: number, currency: string) {
-    this.amount = amount;
-    this.currency = currency;
-    this.margin = 20;
+  constructor(amt: number, ccy: string) {
+    this.amt = amt;
+    this.ccy = ccy;
+    this.mgn = 15;
     this.vat = 20;
   }
 
   getResellerPrice(): number {
-    const marginAmount = (this.amount * this.margin) / 100;
-    const vatAmount = (marginAmount * this.vat) / 100;
-    return this.amount + marginAmount + vatAmount;
+    const mgnAmt = (this.amt * this.mgn) / 100;
+    const vatAmt = (mgnAmt * this.vat) / 100;
+    return this.amt + mgnAmt + vatAmt;
   }
 }
 
