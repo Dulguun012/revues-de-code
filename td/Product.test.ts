@@ -362,6 +362,91 @@ describe("addImage()", () => {
 
     expect(product.imgs.hero).toBe("http://img/hero.png");
   });
+
+  it("rejects a url that doesn't start with http", async () => {
+    const product = makeTypedProduct();
+
+    await expect(product.addImage("hero", "ftp://img/hero.png")).rejects.toThrow(
+      "url must start with http",
+    );
+  });
+
+  it("appends the supplier name to the context key when overwriting an existing image", async () => {
+    const product = makeTypedProduct();
+    product.splrRgns.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", "EU"));
+    await product.addImage("hero", "http://img/hero-v1.png");
+
+    await product.addImage("hero", "http://img/hero-v2.png");
+
+    expect(product.imgs["hero-Acme Corp"]).toBe("http://img/hero-v2.png");
+    expect(product.imgs["hero"]).toBe("http://img/hero-v1.png");
+  });
+
+  it("falls back to a generic '-supplier' suffix when the supplier has no email", async () => {
+    const product = makeTypedProduct();
+    product.splrRgns.set("EU", new Supplier("s1", "Acme Corp", "", "EU"));
+    await product.addImage("hero", "http://img/hero-v1.png");
+
+    await product.addImage("hero", "http://img/hero-v2.png");
+
+    expect(product.imgs["hero-supplier"]).toBe("http://img/hero-v2.png");
+  });
+
+  it("falls back to the warehouse name when the supplier has an empty region and a warehouse is set", async () => {
+    const product = makeTypedProduct();
+    product.wh = new Warehouse("w1", "Main Depot", "1 Dock Rd", "EU");
+    product.splrRgns.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", ""));
+    await product.addImage("hero", "http://img/hero-v1.png");
+
+    await product.addImage("hero", "http://img/hero-v2.png");
+
+    expect(product.imgs["hero-Main Depot"]).toBe("http://img/hero-v2.png");
+  });
+
+  it("falls back to the plain context key when the supplier has an empty region and no warehouse is set", async () => {
+    const product = makeTypedProduct();
+    product.splrRgns.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", ""));
+    await product.addImage("hero", "http://img/hero-v1.png");
+
+    await product.addImage("hero", "http://img/hero-v2.png");
+
+    expect(product.imgs["hero"]).toBe("http://img/hero-v2.png");
+  });
+
+  it("falls back to the plain context key when the supplier has no region at all", async () => {
+    const product = makeTypedProduct();
+    // Supplier with falsy region (empty string or would be undefined if constructor allowed it)
+    product.splrRgns.set("key1", new Supplier("s1", "NoRegion Corp", "noregion@example.com", ""));
+    await product.addImage("hero", "http://img/hero-v1.png");
+
+    await product.addImage("hero", "http://img/hero-v2.png");
+
+    // No warehouse set, so falls back to plain context key
+    expect(product.imgs["hero"]).toBe("http://img/hero-v2.png");
+  });
+
+  it("falls back to warehouse name when supplier has no region and warehouse is set", async () => {
+    const product = makeTypedProduct();
+    product.wh = new Warehouse("w1", "Central Hub", "1 Hub St", "UK");
+    // Supplier with no/empty region
+    product.splrRgns.set("key1", new Supplier("s1", "NoRegion Corp", "noregion@example.com", ""));
+    await product.addImage("hero", "http://img/hero-v1.png");
+
+    await product.addImage("hero", "http://img/hero-v2.png");
+
+    // With warehouse set, should append warehouse name instead of plain context
+    expect(product.imgs["hero-Central Hub"]).toBe("http://img/hero-v2.png");
+  });
+
+  it("throws when a regional supplier has a malformed email", async () => {
+    const product = makeTypedProduct();
+    product.splrRgns.set("EU", new Supplier("s1", "Acme Corp", "not-an-email", "EU"));
+    await product.addImage("hero", "http://img/hero-v1.png");
+
+    await expect(product.addImage("hero", "http://img/hero-v2.png")).rejects.toThrow(
+      "Supplier Acme Corp has a malformed email: not-an-email",
+    );
+  });
 });
 
 describe("addSupplierToRegion()", () => {

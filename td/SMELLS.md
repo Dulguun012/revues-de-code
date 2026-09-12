@@ -407,16 +407,110 @@ to the method that uses them.
 `addImage(ctx: string, url: string, overwrite: boolean)` takes a third
 parameter that reads as meaningful — "should this replace an existing
 image at that context key?" — but the body never references `overwrite`
-at all: `this.imgs[ctx] = url` unconditionally overwrites regardless of
-what's passed. Like smell #12, `tsc --noEmit` doesn't catch this
-(`noUnusedParameters` isn't enabled in `tsconfig.json`), so it compiles
-silently — a caller can pass `addImage("hero", url, false)` expecting the
-existing image to be preserved and get it clobbered anyway, with nothing
-in the type system or the build warning that the parameter is dead. Worse
-than a typically-unused variable: this one is part of the method's public
+at all (this remains true even after smell #24 adds real branching logic
+to the method: whether an existing image gets overwritten or renamed is
+now driven entirely by whether `this.imgs[ctx]` is already set, still
+completely ignoring the `overwrite` argument). Like smell #12, `tsc
+--noEmit` doesn't catch this (`noUnusedParameters` isn't enabled in
+`tsconfig.json`), so it compiles silently — a caller can pass
+`addImage("hero", url, false)` expecting the existing image to be
+preserved and get it clobbered/renamed anyway, with nothing in the type
+system or the build warning that the parameter is dead. Worse than a
+typically-unused variable: this one is part of the method's public
 signature, so every call site has to supply a value for a parameter that
 changes nothing, which actively misleads callers about what control they
 have over the method's behavior.
+
+## 24. Clean-code rulebook violated on purpose — `addImage()`
+
+`addImage()` grew real business rules — reject non-`http` URLs, and when
+overwriting an existing image at a context key, rename the key by
+appending a qualifying supplier's name (one with both a non-empty `rgn`
+and an `eml` that looks vaguely email-shaped) — implemented to break as
+many "clean code" guidelines at once as plausible, while still being
+correct enough to pass the tests written against it:
+
+- **No guard clauses, arrow-shaped nesting**: the whole method is one
+  `if (url) { if (url.startsWith...) { if (!imgExists) { ... } else { ...
+  } ... } else { throw } } else { throw }` — six-plus levels deep for logic
+  that a single `if (!url || !url.startsWith("http")) throw ...` guard
+  clause at the top would flatten completely (compare to `sell()`,
+  `addSupplierToRegion()`).
+- **Duplicated/misleading error messages**: both the "falsy `url`" branch
+  and the "doesn't start with http" branch throw the exact same
+  `"url must start with http"` message — a caller passing `url: ""` gets
+  told the URL doesn't start with "http" (technically true, but the actual
+  problem — a missing URL — is masked by a message written for a different
+  case).
+- **Fallback logic that multiplies branches instead of simplifying them**:
+  every `else` now does *something* (see smell #25) rather than being
+  empty, but "avoid empty `else`" was satisfied by adding more special
+  cases, not by flattening the structure — the method still branches on
+  four different supplier shapes to decide one string.
+- **Magic-string/ad hoc validation instead of a real check**:
+  `url.substring(0, 4) === "http"` (matches `"httpx"`, rejects
+  `"HTTP://..."`) and an `indexOf("@")`/`indexOf(".", ...)` hand-rolled
+  "email validation" (accepts `"a@.@b"`-style nonsense, and the whole
+  `s.rgn`/`s.eml` truthiness+length dance could be one boolean expression)
+  instead of a proper `URL`/regex check or a named helper.
+- **Silent last-write-wins with no `break`**: the `for...of` loop over
+  `this.splrRgns` keeps reassigning `k` every time a qualifying supplier is
+  found and never `break`s, so with multiple qualifying suppliers, the
+  *last* one iterated (Map insertion order) silently wins — there's no
+  indication in the code that this is intentional versus a bug from
+  forgetting to stop the loop.
+- **Negated condition instead of a positive guard**:
+  `if (!(this.imgs[ctx] === undefined))` instead of the equivalent, far
+  more readable `if (this.imgs[ctx] !== undefined)` (or simply
+  `if (ctx in this.imgs)`).
+
+**On testing**: `Product.test.ts` has seven passing tests for this method —
+happy path, URL-scheme rejection, the supplier-rename-on-overwrite case,
+and (see smell #25) one per fallback branch. All seven genuinely pass, and
+between them they exercise every reachable branch — which is a step up
+from the earlier version's three tests (see smell #25's note on what's
+still *not* covered: last-write-wins with multiple qualifying suppliers).
+The remaining lesson: full branch coverage still doesn't mean the
+*design* is good — every test above passes against a method that's still
+deeply nested, still validates emails with hand-rolled `indexOf` calls
+instead of a real check, and still decides a lot of behavior implicitly
+from a `for` loop with no `break`. "All branches are tested" and "this
+code is well-written" are different claims.
+
+## 25. Every `else` now does *something* — but the fallbacks compound the mess
+
+Following up on smell #24's three empty `else {}` blocks: each one now
+has real behavior instead of being a no-op, but the fallbacks were chosen
+to maximize branch count and cross-cutting behavior, not to make the
+method more correct or more testable:
+
+- **No email at all** (`s.eml` falsy) → renames the key to a generic
+  `ctx + "-supplier"` marker that throws away which supplier it was,
+  discarding exactly the information (`s.nm`) the *other* branch uses for
+  the same rename.
+- **No region at all** (`s.rgn` falsy) → reaches into `this.wh` (the
+  product's own warehouse, unrelated to the supplier being inspected) and
+  falls back to `ctx + "-" + this.wh.nm`, or plain `ctx` if there's no
+  warehouse. This is smell #17 ("tell, don't ask") happening *inside*
+  another smell: a branch about a missing supplier region silently pivots
+  to reading a completely different collaborator's field.
+- **Malformed email** (has `@` but fails the ad hoc format check) → throws
+  `Supplier ${s.nm} has a malformed email: ${s.eml}`, the one fallback
+  that's a hard failure rather than a soft default. There's no stated rule
+  for *why* a bad email throws while a missing region silently degrades to
+  a warehouse name — both are "the supplier record is incomplete/invalid,"
+  handled two incompatible ways a few lines apart.
+
+None of these fallbacks are documented anywhere except by reading the
+branches themselves, and because the loop over `this.splrRgns` still has
+no `break` (smell #24), whichever fallback applies is decided by *whichever
+supplier is iterated last* if there's more than one in the map — so the
+same `addImage()` call can produce a different key depending on Map
+insertion order, a detail nothing in the method's signature hints at.
+`Product.test.ts` covers each fallback in isolation (one supplier per
+test) but never a mix of qualifying and disqualifying suppliers in the
+same call — so the last-wins interaction between fallbacks remains
+observable in the code but unverified by any test.
 
 ## `Product.test.ts` — deliberate design, not a smell
 
