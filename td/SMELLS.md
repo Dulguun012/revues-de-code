@@ -121,6 +121,19 @@ still uses the blank-slot form (`for (const [, s] of ...)`), so the two
 loops are now also inconsistent with each other in addition to being
 duplicated (see smell #3).
 
+## 13. Non-null assertion (`!`) silencing a real null case
+
+`receiveStock()` (174–182) logs `this.wh!.nm` — asserting `warehouse` is
+never `null` even though the constructor's `wh: Warehouse | null` parameter
+(78, 96) says otherwise, and nothing upstream guarantees a `Product` always
+has a warehouse assigned before stock is received. Unlike
+`addSupplierToRegion()`, which does the honest thing (`if (!s) throw new
+Error(...)`, line 145), this uses `!` to make the type checker stop
+complaining instead of handling the `null` case — if `wh` is ever actually
+`null` here, it throws a runtime `TypeError: Cannot read properties of null`
+with no domain-meaningful error message, and `tsc --noEmit` won't catch it
+because the assertion tells the compiler to trust the developer.
+
 ## `Product.test.ts` — deliberate design, not a smell
 
 Worth calling out explicitly in review so it isn't mistaken for an
