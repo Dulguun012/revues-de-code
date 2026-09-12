@@ -134,6 +134,22 @@ complaining instead of handling the `null` case — if `wh` is ever actually
 with no domain-meaningful error message, and `tsc --noEmit` won't catch it
 because the assertion tells the compiler to trust the developer.
 
+## 14. Type widening forcing an `as` cast — `sell()`
+
+`sell()` (191–194) writes `let nextStat = "out_of_stock";` before assigning
+it to `this.stat`. Because it's declared with `let` and no annotation,
+TypeScript infers `nextStat: string` (widened), not the literal type
+`"out_of_stock"` — so `this.stat = nextStat` doesn't type-check against
+`stat: PrdStat` and needs `as PrdStat` to compile. The cast silences the
+error instead of fixing the actual issue: nothing stops a typo like
+`"out_of_stok"` from being assigned to `nextStat` and then cast straight
+through to `this.stat` with zero compiler complaint, defeating the whole
+point of `PrdStat` being a union type in the first place. (`const nextStat =
+"out_of_stock"` would have kept the literal type and needed no cast — this
+is the classic `let`-vs-`const`-and-literal-types trap.) Compare with
+`deprecate()` (207), which assigns the literal directly
+(`this.stat = "deprecated"`) and type-checks cleanly with no cast at all.
+
 ## `Product.test.ts` — deliberate design, not a smell
 
 Worth calling out explicitly in review so it isn't mistaken for an

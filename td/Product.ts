@@ -188,7 +188,10 @@ export class Product {
     this.stk -= qty;
     this.updatedAt = new Date();
 
-    if (this.stk === 0) this.stat = "out_of_stock";
+    if (this.stk === 0) {
+      let nextStat = "out_of_stock";
+      this.stat = nextStat as PrdStat;
+    }
 
     await prisma.product.update({
       where: { id: this.id },
