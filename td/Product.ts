@@ -159,7 +159,7 @@ export class Product {
 
   // --- Catalog / images / discounts ---
 
-  async addImage(ctx: string, url: string): Promise<void> {
+  async addImage(ctx: string, url: string, overwrite: boolean): Promise<void> {
     this.imgs[ctx] = url;
     this.updatedAt = new Date();
     await prisma.product.update({

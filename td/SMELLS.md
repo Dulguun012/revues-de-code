@@ -402,6 +402,22 @@ any method runs; these two don't, because they were never state to begin
 with. The fix is simply demoting them back to `let`/`const` locals scoped
 to the method that uses them.
 
+## 23. Unused parameter — `addImage()`'s `overwrite`
+
+`addImage(ctx: string, url: string, overwrite: boolean)` takes a third
+parameter that reads as meaningful — "should this replace an existing
+image at that context key?" — but the body never references `overwrite`
+at all: `this.imgs[ctx] = url` unconditionally overwrites regardless of
+what's passed. Like smell #12, `tsc --noEmit` doesn't catch this
+(`noUnusedParameters` isn't enabled in `tsconfig.json`), so it compiles
+silently — a caller can pass `addImage("hero", url, false)` expecting the
+existing image to be preserved and get it clobbered anyway, with nothing
+in the type system or the build warning that the parameter is dead. Worse
+than a typically-unused variable: this one is part of the method's public
+signature, so every call site has to supply a value for a parameter that
+changes nothing, which actively misleads callers about what control they
+have over the method's behavior.
+
 ## `Product.test.ts` — deliberate design, not a smell
 
 Worth calling out explicitly in review so it isn't mistaken for an
