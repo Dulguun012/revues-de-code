@@ -61,6 +61,30 @@ export class Price {
     const vatAmt = (mgnAmt * this.vat) / 100;
     return this.amt + mgnAmt + vatAmt;
   }
+
+  getAmt(): number {
+    return this.amt;
+  }
+
+  setAmt(amt: number): void {
+    this.amt = amt;
+  }
+
+  getCcy(): string {
+    return this.ccy;
+  }
+
+  setCcy(ccy: string): void {
+    this.ccy = ccy;
+  }
+
+  getMgn(): number {
+    return this.mgn;
+  }
+
+  setMgn(mgn: number): void {
+    this.mgn = mgn;
+  }
 }
 
 export class Product {
