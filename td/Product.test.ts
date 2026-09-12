@@ -307,10 +307,50 @@ describe("deprecate()", () => {
 describe("addDiscount()", () => {
   it("appends the discount code to the discounts list", async () => {
     const product = makeTypedProduct();
+    const validUntil = new Date(Date.now() + 1000 * 60 * 60 * 24); // +1 day
 
-    await product.addDiscount("SUMMER20");
+    await product.addDiscount("SUMMER20", validUntil);
 
     expect(product.dscs).toEqual(["WELCOME10", "SUMMER20"]);
+  });
+
+  it("throws when adding a 3rd discount", async () => {
+    const product = makeTypedProduct();
+    const validUntil = new Date(Date.now() + 1000 * 60 * 60 * 24); // +1 day
+    await product.addDiscount("SUMMER20", validUntil);
+
+    await expect(product.addDiscount("FALL30", validUntil)).rejects.toThrow(
+      "Cannot have more than 2 discounts at the same time",
+    );
+    expect(product.dscs).toEqual(["WELCOME10", "SUMMER20"]);
+  });
+
+  it("throws when validUntil is in the past", async () => {
+    const product = makeTypedProduct();
+    const pastDate = new Date(Date.now() - 1000);
+
+    await expect(product.addDiscount("SUMMER20", pastDate)).rejects.toThrow(
+      "validUntil cannot be in the past",
+    );
+  });
+
+  // FLAKY BY DESIGN (see SMELLS.md #21): this test races the real system
+  // clock. `barelyFuture` is captured with only a 1ms margin, then
+  // addDiscount() itself — not this test — spins the CPU for ~1.4ms
+  // (disguised as a "sanity-check" JSON round-trip) before taking its own
+  // `new Date()` reading to compare against it. That hidden delay usually,
+  // but not always, eats past the 1ms margin, so this test fails
+  // intermittently for a reason that has nothing to do with the discount
+  // logic actually being broken. This is what you get for comparing
+  // against a live system clock instead of an injected/fake one.
+  it("accepts a validUntil that is barely in the future", async () => {
+    const product = makeTypedProduct();
+    // Only a 1ms margin: `validUntil` is essentially "now."
+    const barelyFuture = new Date(Date.now() + 1);
+
+    await product.addDiscount("SUMMER20", barelyFuture);
+
+    expect(product.getValidUntil()).toBe(barelyFuture);
   });
 });
 

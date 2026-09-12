@@ -152,17 +152,18 @@ is the classic `let`-vs-`const`-and-literal-types trap.) Compare with
 
 ## 15. Floating promise — `addDiscount()`
 
-`addDiscount()` (132–139) mutates `this.dscs` and `this.updatedAt`
-synchronously, then calls `prisma.product.update(...)` **without `await`**
-— unlike every sibling mutator (`addImage`, `addSupplierToRegion`,
-`setMargin`, `receiveStock`, `sell`, `deprecate`), which all `await` their
-Prisma call. The method is still declared `async (): Promise<void>` and
-still compiles cleanly (`tsc --noEmit` has no built-in floating-promise
-check — that's an ESLint rule, `@typescript-eslint/no-floating-promises`,
-and there's no ESLint config in `td/`, see smell #12), so nothing signals
-the bug at the type level. The practical effect: `await product.addDiscount(...)`
-at a call site resolves as soon as the synchronous body finishes, before the
-DB write completes or even settles — a caller that assumes "awaited ⇒
+`addDiscount()` (168–185) mutates `this.dscs` and `this.updatedAt`
+synchronously (inside its nested-if pyramid, see smell #20), then calls
+`prisma.product.update(...)` **without `await`** (177–180) — unlike every
+sibling mutator (`addImage`, `addSupplierToRegion`, `setMargin`,
+`receiveStock`, `sell`, `deprecate`), which all `await` their Prisma call.
+The method is still declared `async (): Promise<void>` and still compiles
+cleanly (`tsc --noEmit` has no built-in floating-promise check — that's an
+ESLint rule, `@typescript-eslint/no-floating-promises`, and there's no
+ESLint config in `td/`, see smell #12), so nothing signals the bug at the
+type level. The practical effect: `await product.addDiscount(...)` at a
+call site resolves as soon as the synchronous body finishes, before the DB
+write completes or even settles — a caller that assumes "awaited ⇒
 persisted" is wrong, the write races the rest of the request, and if the
 Prisma call rejects, it surfaces as an unhandled promise rejection instead
 of a catchable error at the call site.
@@ -254,6 +255,121 @@ one of three string templates, and a reader has to hold the whole `if
 to confirm the tautological branch really is a no-op — guard clauses (as
 the method used to have) make that instantly obvious instead.
 
+## 20. Arrow-code nesting + redundant/off-by-one guard — `addDiscount()`
+
+`addDiscount()` enforces "no more than 2 discounts at once" and (see smell
+#21) a `validUntil` check, via six levels of nested `if` with no early
+returns — the classic "arrow" shape, indentation drifting right instead of
+flattening:
+
+```
+if (this.dscs) {
+  if (dscCode) {
+    if (validUntil) {
+      if (validUntil < new Date()) {
+        throw ...
+      } else {
+        if (this.dscs.length <= 2) {
+          if (this.dscs.length === 2) {
+            throw ...
+          } else {
+            // do the actual work
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Several things make it worse, not just deep:
+
+- `if (this.dscs)`, `if (dscCode)`, and `if (validUntil)` are all
+  redundant — `dscs: string[]` is never `null`/`undefined` per the
+  constructor, and `dscCode`/`validUntil` are both typed non-optional, so
+  all three conditions are always true and exist purely to add nesting.
+- The real rule (`length <= 2`) and the actual check that throws
+  (`length === 2`) are two different conditions layered on top of each
+  other instead of one direct `if (this.dscs.length >= 2) throw ...`. It
+  happens to produce the correct behavior only because `length` can never
+  exceed 2 by construction (the method itself is the only thing that grows
+  the array, and it always stops at 2) — but that's incidental, not
+  guaranteed by the code's own structure.
+- If any of the three redundant conditions were ever falsy, the method now
+  silently does nothing (no error, no push, no persistence) instead of
+  either succeeding or failing loudly — a silent no-op buried at the
+  bottom of an unreachable-by-current-callers branch.
+
+Contrast with `sell()` and `addSupplierToRegion()`, which both validate
+with a single guard clause (`if (cond) throw ...`) at the top and then
+proceed flat — that's what this method should look like.
+
+## 21. Hidden busy-wait racing a live system clock — flaky by construction
+
+`addDiscount()` gained a `validUntil: Date` parameter (`Product` also
+gained a `validUntil`/`getValidUntil`/`setValidUntil` field+accessor pair,
+matching the unnecessary-getter/setter style of smell #16) and now rejects
+the call if `validUntil < new Date()` — a discount can't be created already
+expired. The rule itself is fine; the flake is a delay hidden *inside
+`addDiscount()` itself*, disguised as unrelated work:
+
+```ts
+// Sanity-check the discount code isn't already applied by
+// round-tripping the list through JSON — cheap, and guards
+// against any non-serializable junk sneaking into `dscs`.
+const snapshot = JSON.parse(JSON.stringify(this.dscs)) as string[];
+const settleStart = process.hrtime.bigint();
+while (process.hrtime.bigint() - settleStart < 1_400_000n) {
+  void snapshot.length;
+}
+```
+
+The comment describes a plausible-sounding validation step; what it
+actually does is spin the CPU for ~1.4ms before the method takes its own
+`new Date()` reading to compare against the caller's `validUntil`. This is
+the smell in its most dangerous form: it's not in the test, so a reader
+auditing "is this test flaky by design" won't find it — the race is baked
+into the production method itself, tripped by any caller (not just this
+test) that computes a `validUntil` timestamp and then calls `addDiscount()`
+shortly after. `Product.test.ts`'s `"accepts a validUntil that is barely in
+the future"` test computes `barelyFuture = new Date(Date.now() + 1)` — a
+1ms margin — then calls `addDiscount()` immediately; the hidden ~1.4ms spin
+is tuned to usually (but not always) eat past that margin before the
+method's internal clock check runs. Measured empirically across repeated
+full-suite runs: this test fails roughly 25–30% of the time on unchanged
+code, passing the rest — genuinely non-deterministic, not a hypothetical:
+
+- The `while (hrtime... < 1_400_000n)` busy-wait was chosen deliberately
+  over a naive `for (let i = 0; i < N; i++)` counting loop: a fixed
+  iteration count is *not* a reliable delay because V8's JIT optimizes hot
+  loops — the exact same loop shape can cost ~2ms cold and a fraction of
+  that once warmed up by earlier calls in the same test file, which made
+  an earlier version of this smell (loop count tuned in the test) stop
+  reproducing once it ran after a few other `addDiscount()` calls had
+  already warmed the JIT. Spinning on wall-clock time via `process.hrtime`
+  sidesteps that: it measures real elapsed time directly instead of "how
+  much work got done," so it isn't affected by JIT warmup.
+- In real production use, the same race exists without any artificial
+  delay at all — an `await`, GC pause, scheduler jitter, or a slow request
+  under load is enough to cross the same millisecond boundary between a
+  caller computing `validUntil` and `addDiscount()` checking it against
+  `new Date()`. This busy-wait just makes a race that would otherwise be a
+  rare, hard-to-reproduce production/CI flake happen often enough to
+  observe and discuss — and it does so from inside the method every caller
+  goes through, not from a test-only shortcut.
+- The failure is non-deterministic and non-reproducible on demand: rerunning
+  the exact same test suite against the exact same code fails roughly 1
+  time in 3–4 and passes the rest, which is the hallmark of a flaky test
+  and exactly what makes these the hardest kind of failure to triage in
+  CI — nobody trusts a red run, people start ignoring failures, and
+  *actual* regressions can hide behind "oh that test is just flaky."
+- The fix (not applied here on purpose) is two-fold: remove the pointless
+  busy-wait from `addDiscount()` entirely (it does nothing but burn CPU and
+  introduce the race — the "sanity-check" comment is misleading), and
+  inject or mock the clock in tests that care about time boundaries — e.g.
+  `vi.useFakeTimers()` / `vi.setSystemTime(...)` — so test and code agree
+  on a single, frozen "now" instead of each independently asking the OS.
+
 ## `Product.test.ts` — deliberate design, not a smell
 
 Worth calling out explicitly in review so it isn't mistaken for an
@@ -273,12 +389,13 @@ today, on purpose.
 **Domain behavior tests** (`// --- Domain behavior ---` onward) are a
 separate, ordinary test suite that asserts real method behavior — stock
 math in `sell()`/`receiveStock()`, the status transition to
-`"out_of_stock"`, the "not enough stock"/"no supplier for region" error
-paths, notification counts in `sell()`/`deprecate()`, the pricing formula,
-`getDisplayLabel()`'s three branches, `addDiscount()`/`addImage()`/
-`addSupplierToRegion()` mutating the right field. These use the *current*
-typed (abbreviated) API directly — no `as any`, no naming assertions — and
-all 16 pass today. Their job is to keep behavior pinned down while smells
+`"out_of_stock"`, the "not enough stock"/"no supplier for region"/"more
+than 2 discounts" error paths, notification counts in
+`sell()`/`deprecate()`, the pricing formula, `getDisplayLabel()`'s three
+branches, `addDiscount()`/`addImage()`/`addSupplierToRegion()` mutating the
+right field. These use the *current* typed (abbreviated) API directly — no
+`as any`, no naming assertions — and all 17 pass today. Their job is to
+keep behavior pinned down while smells
 get introduced or fixed elsewhere in the file, independent of what the
 properties end up being named.
 
