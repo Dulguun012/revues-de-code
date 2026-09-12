@@ -239,25 +239,54 @@ unit-testing on its own), but nothing in `Product` calls it anymore, so:
   getter, or store VAT differently) and silently break
   `Product.getResellerPrice()` without touching `Price`'s own public API.
 
-## `Product.test.ts` — deliberate design, not a smell
+## 19. Nested if/else pyramid replacing guard clauses — `getDisplayLabel()`
+
+`getDisplayLabel()` (139–153) used to be three flat lines: two early-return
+guard clauses followed by a default return. It's now a `let label` declared
+up front, reassigned through three levels of nested `if/else`, ending in an
+`if (this.stat === "active") { label = this.nm; } else { label = this.nm; }`
+branch where **both arms do exactly the same thing** — the innermost
+`if/else` is pure noise, there to add depth, not behavior. The method's
+observable behavior is unchanged (same three outcomes, same conditions),
+but the indentation now goes four levels deep for a function that returns
+one of three string templates, and a reader has to hold the whole `if
+{...} else { if {...} else { if {...} else {...} } }` shape in their head
+to confirm the tautological branch really is a no-op — guard clauses (as
+the method used to have) make that instantly obvious instead.
 
 ## `Product.test.ts` — deliberate design, not a smell
 
 Worth calling out explicitly in review so it isn't mistaken for an
-oversight: `Product.test.ts` asserts against the *proper, non-abbreviated*
-names (`amount`, `name`, `email`, `region`, `suppliersRegions`, `recipient`,
-`subject`, `body`, `channel`, `productId`, ...) rather than the current
-abbreviated ones. Every access goes through an `as any` cast so the file
-still compiles against today's abbreviated `Product.ts` — the naming issue
-surfaces as a failing runtime assertion with a descriptive message, not a
-compiler error, which is what makes it useful as a students' checklist for
-fixing smell #11.
+oversight. The file has two halves with different jobs:
+
+**Naming-discovery tests** (top of the file, `describe("Price")` through
+`describe("Product")`'s two `it`s) assert against the *proper,
+non-abbreviated* names (`amount`, `name`, `email`, `region`,
+`suppliersRegions`, `recipient`, `subject`, `body`, `channel`, `productId`,
+...) rather than the current abbreviated ones. Every access goes through an
+`as any` cast so the file still compiles against today's abbreviated
+`Product.ts` — the naming issue surfaces as a failing runtime assertion
+with a descriptive message, not a compiler error, which is what makes it
+useful as a students' checklist for fixing smell #11. All 5 of these fail
+today, on purpose.
+
+**Domain behavior tests** (`// --- Domain behavior ---` onward) are a
+separate, ordinary test suite that asserts real method behavior — stock
+math in `sell()`/`receiveStock()`, the status transition to
+`"out_of_stock"`, the "not enough stock"/"no supplier for region" error
+paths, notification counts in `sell()`/`deprecate()`, the pricing formula,
+`getDisplayLabel()`'s three branches, `addDiscount()`/`addImage()`/
+`addSupplierToRegion()` mutating the right field. These use the *current*
+typed (abbreviated) API directly — no `as any`, no naming assertions — and
+all 16 pass today. Their job is to keep behavior pinned down while smells
+get introduced or fixed elsewhere in the file, independent of what the
+properties end up being named.
 
 The suite also stubs `@prisma/client` via `vi.mock` purely so importing
-`Product.ts` and calling `sell()`/`deprecate()` doesn't require a live
-database connection (see smell #1). By design, the tests must not assert
-that `prisma.product.update`/`upsert` was called, nor check any persisted
-state — they exercise only in-memory behavior and naming, not persistence.
+`Product.ts` and calling `sell()`/`deprecate()`/etc. doesn't require a live
+database connection (see smell #1). By design, no test — naming or
+behavioral — asserts that `prisma.product.update`/`upsert` was called, nor
+checks any persisted state; both halves exercise only in-memory behavior.
 
 ## Carried over from the C# original (worth flagging in review even though "fixed")
 

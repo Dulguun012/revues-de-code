@@ -137,9 +137,21 @@ export class Product {
   }
 
   getDisplayLabel(): string {
-    if (this.stat === "deprecated") return `[DISCONTINUED] ${this.nm}`;
-    if (this.stk === 0) return `[OUT OF STOCK] ${this.nm}`;
-    return this.nm;
+    let label: string;
+    if (this.stat === "deprecated") {
+      label = `[DISCONTINUED] ${this.nm}`;
+    } else {
+      if (this.stk === 0) {
+        label = `[OUT OF STOCK] ${this.nm}`;
+      } else {
+        if (this.stat === "active") {
+          label = this.nm;
+        } else {
+          label = this.nm;
+        }
+      }
+    }
+    return label;
   }
 
   // --- Catalog / images / discounts ---
@@ -154,12 +166,22 @@ export class Product {
   }
 
   async addDiscount(dscCode: string): Promise<void> {
-    this.dscs.push(dscCode);
-    this.updatedAt = new Date();
-    prisma.product.update({
-      where: { id: this.id },
-      data: { discounts: this.dscs, updatedAt: this.updatedAt },
-    });
+    if (this.dscs) {
+      if (dscCode) {
+        if (this.dscs.length <= 2) {
+          if (this.dscs.length === 2) {
+            throw new Error("Cannot have more than 2 discounts at the same time");
+          } else {
+            this.dscs.push(dscCode);
+            this.updatedAt = new Date();
+            prisma.product.update({
+              where: { id: this.id },
+              data: { discounts: this.dscs, updatedAt: this.updatedAt },
+            });
+          }
+        }
+      }
+    }
   }
 
   // --- Suppliers ---

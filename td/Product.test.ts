@@ -167,3 +167,179 @@ describe("Product", () => {
     expect(notification.productId).toBe("p1");
   });
 });
+
+// --- Domain behavior ---
+//
+// The tests above only check naming; these check that the methods actually
+// do what they claim, using today's real (abbreviated) typed API rather
+// than `as any` casts.
+
+function makeTypedProduct() {
+  const price = new Price(50, "EUR");
+  return new Product(
+    "p1",
+    "Wireless Mouse",
+    "wireless-mouse",
+    price,
+    ["WELCOME10"],
+    { thumbnail: "http://img/thumb.png" },
+    new Map<string, Supplier>(),
+    0.2,
+    "10x5x3cm",
+    100,
+    100,
+    null,
+  );
+}
+
+describe("Price.getResellerPrice()", () => {
+  it("adds margin then VAT on top of the margin only", () => {
+    const price = new Price(100, "EUR");
+    price.mgn = 10;
+    price.vat = 20;
+
+    // margin = 10, vat on margin = 2 -> 100 + 10 + 2
+    expect(price.getResellerPrice()).toBe(112);
+  });
+});
+
+describe("Product.getResellerPrice()", () => {
+  it("matches the same margin/VAT formula as Price", () => {
+    const product = makeTypedProduct();
+    product.price.mgn = 10;
+    product.price.vat = 20;
+
+    expect(product.getResellerPrice()).toBe(product.price.getResellerPrice());
+  });
+});
+
+describe("getDisplayLabel()", () => {
+  it("prefixes discontinued products", () => {
+    const product = makeTypedProduct();
+    product.stat = "deprecated";
+
+    expect(product.getDisplayLabel()).toBe("[DISCONTINUED] Wireless Mouse");
+  });
+
+  it("prefixes out-of-stock products", () => {
+    const product = makeTypedProduct();
+    product.stk = 0;
+
+    expect(product.getDisplayLabel()).toBe("[OUT OF STOCK] Wireless Mouse");
+  });
+
+  it("returns the plain name for an active, in-stock product", () => {
+    const product = makeTypedProduct();
+
+    expect(product.getDisplayLabel()).toBe("Wireless Mouse");
+  });
+});
+
+describe("receiveStock()", () => {
+  it("increases both stock and quantity by the received amount", async () => {
+    const product = makeTypedProduct();
+    product.wh = new Warehouse("w1", "Main Depot", "1 Dock Rd", "EU");
+
+    await product.receiveStock(20);
+
+    expect(product.stk).toBe(120);
+    expect(product.qty).toBe(120);
+  });
+});
+
+describe("sell()", () => {
+  it("decreases stock by the sold quantity", async () => {
+    const product = makeTypedProduct();
+
+    await product.sell(30);
+
+    expect(product.stk).toBe(70);
+  });
+
+  it("flips status to out_of_stock when the last unit is sold", async () => {
+    const product = makeTypedProduct();
+
+    await product.sell(100);
+
+    expect(product.stk).toBe(0);
+    expect(product.stat).toBe("out_of_stock");
+  });
+
+  it("throws when selling more than the available stock", async () => {
+    const product = makeTypedProduct();
+
+    await expect(product.sell(101)).rejects.toThrow("Not enough stock");
+    expect(product.stk).toBe(100);
+  });
+
+  it("pushes one notification per regional supplier", async () => {
+    const product = makeTypedProduct();
+    product.splrRgns.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", "EU"));
+    product.splrRgns.set("US", new Supplier("s2", "Widget Inc", "widget@example.com", "US"));
+
+    await product.sell(1);
+
+    expect(product.notifs.length).toBe(2);
+  });
+});
+
+describe("deprecate()", () => {
+  it("sets status to deprecated and zeroes out stock", async () => {
+    const product = makeTypedProduct();
+
+    await product.deprecate();
+
+    expect(product.stat).toBe("deprecated");
+    expect(product.stk).toBe(0);
+  });
+
+  it("notifies every regional supplier plus a customer-facing notification", async () => {
+    const product = makeTypedProduct();
+    product.splrRgns.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", "EU"));
+
+    await product.deprecate();
+
+    // 1 supplier notification + 1 customer notification
+    expect(product.notifs.length).toBe(2);
+  });
+});
+
+describe("addDiscount()", () => {
+  it("appends the discount code to the discounts list", async () => {
+    const product = makeTypedProduct();
+
+    await product.addDiscount("SUMMER20");
+
+    expect(product.dscs).toEqual(["WELCOME10", "SUMMER20"]);
+  });
+});
+
+describe("addImage()", () => {
+  it("stores the image url under the given context key", async () => {
+    const product = makeTypedProduct();
+
+    await product.addImage("hero", "http://img/hero.png");
+
+    expect(product.imgs.hero).toBe("http://img/hero.png");
+  });
+});
+
+describe("addSupplierToRegion()", () => {
+  it("assigns the matching supplier to its region", async () => {
+    const product = makeTypedProduct();
+    const supplier = new Supplier("s1", "Acme Corp", "acme@example.com", "EU");
+
+    await product.addSupplierToRegion("EU", [supplier]);
+
+    expect(product.splrRgns.get("EU")).toBe(supplier);
+  });
+
+  it("throws when no supplier matches the region", async () => {
+    const product = makeTypedProduct();
+    const supplier = new Supplier("s1", "Acme Corp", "acme@example.com", "EU");
+
+    await expect(product.addSupplierToRegion("APAC", [supplier])).rejects.toThrow(
+      "No supplier found for region APAC",
+    );
+  });
+});
