@@ -18,7 +18,7 @@ export type PrdStat = "active" | "out_of_stock" | "deprecated";
 export interface Notification {
   id: string;
   recip: string;
-  subj: string;
+  subject: string;
   bod: string;
   chnl: Chnl;
   sentAt: Date;
@@ -343,7 +343,7 @@ export class Product {
     return {
       id: crypto.randomUUID(),
       recip: rcp,
-      subj: sbj,
+      subject: sbj,
       bod: bd,
       chnl: "email",
       sentAt: new Date(),
