@@ -14,4 +14,3 @@ coverage/
 # Générations Marp
 cours/*.html
 cours/*.pdf
-/td/fromCsharp/Models/
