@@ -270,24 +270,30 @@ modifier chaque champ.
 
 ### 21. Un test flaky
 
-**Le smell.** Un test flaky : même code, mêmes entrées, un résultat différent
+**Le smell.** Un des tests est flaky (instable) : il joue le même code, les mêmes entrées, mais on voit un résultat différent
 d'un run à l'autre. Le coupable habituel est une dépendance à quelque chose que
 le test ne contrôle pas — l'horloge système, le réseau, l'aléatoire, le timing.
 Les tests flaky sont pires que pas de test : on apprend à ignorer le rouge.
 
-**Comment le détecter.** Lancez la suite dix fois de suite et regardez les
-chiffres. Quand vous avez trouvé le test qui flippe, résistez à l'envie de
-« corriger le test ». Demandez plutôt : *qu'est-ce que le code testé lit que
+**Comment le détecter.** Lancez la suite plusieurs fois de suite et regardez les
+résultats.  Prenez le test qui est rouge et jouez le individuellement plusieurs fois. Il redevient vert.
+
+Quand vous avez trouvé le test instable, résistez à l'envie de
+« corriger le test ». 
+Demandez plutôt : *qu'est-ce que le code testé lit que
 le test ne contrôle pas ?* Puis lisez la méthode testée très attentivement, y
 compris le travail préparatoire « inoffensif » qu'elle fait avant le vrai
-check.
+check. 
+
+Peut être que ce travail qui vous semble innofensif ou que vous ne comprenez pas vraiement ne sert à rien.
+Essayez de le supprimer et regardez ce qui se passe. Les tests reviennent au vert ? Alors c'était lui le problème.
 
 **Indice.** Le test qui flippe est dans le bloc `addDiscount()`. Le test
 lui-même est court et a l'air innocent — la cause n'est pas dans le fichier de
 test. Chronométrez l'exécution de la méthode.
 
 **Attendu de votre part.** Deux choses : supprimez la cause dans le code de
-production, et rendez le test déterministe en contrôlant l'horloge (Vitest a
+production, OU BIEN rendez le test déterministe en contrôlant l'horloge (Vitest a
 des outils pour ça). Le test doit ensuite passer 20/20 runs. Expliquez dans
 votre message de commit quelle race condition se jouait, et entre quoi.
 
