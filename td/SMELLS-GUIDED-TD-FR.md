@@ -9,22 +9,22 @@ marches pour y arriver.
 
 Chaque entrée vous donne :
 
-- **Le smell** — ce que c'est, en général (pas spécifique à ce fichier).
+- **Le smell** — quel est la nature du défaut à trouver.
 - **Comment le détecter** — les questions à se poser, les outils à lancer, les
-  patterns à chercher avec grep.
-- **Indice** — où regarder dans `Product.ts`. Pas la réponse.
-- **Attendu de votre part** — ce qu'un bon fix doit accomplir, et comment vous
-  allez le prouver (tests, compilateur, review).
+  patterns à chercher (d'abord avec vos yeux et éventuellement aidé de l'IA mais les réponses toutes faites seront sous-notées).
+- **Indice** — où regarder dans `Product.ts`.  
+- **Attendu de votre part** —  ce que la revue de code doit pointer du doigt en 1), et en 2) ce qu'un bon fix doit accomplir, et comment vous
+  allez le prouver (tests, compilation, review).
 
-Règles du jeu :
+## Règles du jeu :
 
 - `npm run build` (`tsc --noEmit`) doit rester vert après chaque fix.
 - `npm test` ne doit pas devenir *pire*. Certains tests échouent volontairement
   aujourd'hui (voir la dernière section) ; une partie du travail est de les
-  faire passer.
+  faire passer petit à petit.
 - N'ajoutez **pas** d'assertions sur les appels Prisma ou l'état persisté — les
-  tests restent en mémoire.
-- Committez après chaque smell, avec un message qui nomme le smell corrigé.
+  tests restent en mémoire, pas de base de données à ajouter.
+- Committez après chaque smell arrangé, avec un message qui nomme le smell corrigé.
 
 ---
 
@@ -200,15 +200,20 @@ tests de comportement *d'abord*.
 ### 8. Pyramide de `if/else` au lieu de guard clauses
 
 **Le smell.** Une indentation qui part vers la droite. Une méthode qui
-pourrait dire « si X, on a fini ; si Y, on a fini ; sinon… » emballe au lieu de
-ça tout son corps dans `if { … } else { if { … } else { … } }`. La profondeur
-en plus masque la structure simple, et cache parfois une branche qui ne fait
-rien du tout.
+pourrait dire « si X, on a fini ; si Y, on a fini ; sinon… » est plus lisible que
+si on a toutes les conditions imbriquées dans un méga bloc  `if { … } else { if { … } else { … } }`.
+
+Avoir trop de profondeur
+ masque une structure qui pourrait être plus simple (pour le même résultat logique),
+et cache parfois une branche qui ne fait rien du tout.
 
 **Comment le détecter.** Cherchez les méthodes dont la ligne la plus profonde
-est indentée de quatre niveaux ou plus. Comptez les issues distinctes : s'il y
+est indentée de 3 niveaux ou plus. Comptez les issues distinctes : s'il y
 a trois issues et cinq branches, certaines branches sont redondantes. Cherchez
 en particulier un `if/else` dont les deux bras sont identiques.
+
+Vous pouvez utiliser un outil, plugin pour votre IDE, ou un package intégré à la CI (linter).
+Allez voir sur https://github.com/pilotpirxie/cyclomatic-complexity
 
 **Indice.** Commencez par la méthode la plus courte de `Product` qui calcule
 un libellé d'affichage. Comparez le nombre d'issues au nombre de branches.
