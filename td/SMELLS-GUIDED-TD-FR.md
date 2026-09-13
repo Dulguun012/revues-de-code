@@ -3,7 +3,7 @@
 Ceci est la fiche de travail des étudiants. `Product.ts` contient 25 code smells
 plantés volontairement. Ils sont listés ici **du plus simple au plus complexe**,
 pour que vous vous fassiez la main sur des quick wins avant de vous attaquer aux
-refactorings qui demandent une vraie réflexion de design. Le smell n°1 (la god
+refactorings qui demandent une vraie réflexion de design. Le smell n°25 (la god
 class) est l'objectif final de l'exercice : la plupart des autres sont des
 marches pour y arriver.
 
@@ -32,7 +32,7 @@ Règles du jeu :
 
 Chacun se corrige en quelques minutes. Ils vous font l'œil avant les plus durs.
 
-### 11. Abréviations cryptiques
+### 1. Abréviations cryptiques
 
 **Le smell.** Des identifiants tellement raccourcis que le lecteur doit
 *deviner* ce qu'ils veulent dire. Les abréviations économisent quelques frappes
@@ -58,7 +58,7 @@ lire une fois que les noms sont honnêtes.
 
 ---
 
-### 12. Variable inutilisée
+### 2. Variable inutilisée
 
 **Le smell.** Une variable déclarée (ou déstructurée) et jamais lue. Les noms
 morts mentent : ils laissent croire que quelque chose est utilisé alors que
@@ -80,7 +80,7 @@ d'autre (une partie est un autre smell de cette liste).
 
 ---
 
-### 9. Un commentaire qui décrit le passé, pas le code
+### 3. Un commentaire qui décrit le passé, pas le code
 
 **Le smell.** Un commentaire qui explique comment le code était *avant*, ou
 qui affirme qu'un problème est réglé, alors que le code en dessous a toujours
@@ -102,7 +102,7 @@ commentaire qui induit le lecteur suivant en erreur.
 
 ---
 
-### 8. Nombres magiques
+### 4. Nombres magiques
 
 **Le smell.** Un littéral numérique dont le sens ne saute pas aux yeux — et
 dont la *raison* n'est consignée nulle part. Pourquoi 20 et pas 25 ? Qui l'a
@@ -121,7 +121,7 @@ défaut en douce.
 
 ---
 
-### 23. Paramètre inutilisé
+### 5. Paramètre inutilisé
 
 **Le smell.** Un paramètre présent dans la signature d'une méthode mais jamais
 lu dans son corps. Pire qu'une variable locale inutilisée : il fait partie du
@@ -143,7 +143,7 @@ son nom annonce (et vous testez les deux valeurs), soit il saute et vous mettez
 
 ---
 
-### 13. L'assertion non-null (`!`) qui cache un vrai `null`
+### 6. L'assertion non-null (`!`) qui cache un vrai `null`
 
 **Le smell.** L'opérateur `!` dit au compilateur « fais-moi confiance, ce n'est
 jamais null ». Quand le type dit `T | null` et que rien en amont ne garantit
@@ -167,7 +167,7 @@ qui a du sens métier. Écrivez un test qui construit un `Product` avec ce champ
 
 ---
 
-### 14. Widening de type + cast `as`
+### 7. Widening de type + cast `as`
 
 **Le smell.** Un cast (`as SomeType`) est une promesse faite au compilateur que
 vous savez mieux que lui. Quand le cast n'existe que parce qu'une variable a
@@ -197,7 +197,7 @@ Chacun de ces smells vit à l'intérieur d'une seule méthode. Vous allez
 remodeler la logique sans changer ce qu'elle fait — donc écrivez ou lancez les
 tests de comportement *d'abord*.
 
-### 19. Pyramide de `if/else` au lieu de guard clauses
+### 8. Pyramide de `if/else` au lieu de guard clauses
 
 **Le smell.** Une indentation qui part vers la droite. Une méthode qui
 pourrait dire « si X, on a fini ; si Y, on a fini ; sinon… » emballe au lieu de
@@ -219,9 +219,9 @@ toujours passer, sans modification.
 
 ---
 
-### 20. Arrow code avec des gardes redondantes
+### 9. Arrow code avec des gardes redondantes
 
-**Le smell.** Même forme que #19, avec une subtilité en plus : plusieurs des
+**Le smell.** Même forme que #8, avec une subtilité en plus : plusieurs des
 conditions sont *toujours vraies* au vu des types, et la vraie règle métier est
 répartie sur deux conditions empilées. Si l'un des checks « toujours vrais »
 devenait un jour faux, la méthode ne ferait rien, en silence — pas d'erreur,
@@ -240,11 +240,11 @@ dans la même classe.
 **Attendu de votre part.** Des guard clauses en haut, un check par règle, et
 un échec bruyant en cas de violation. Les tests existants « troisième remise »
 et « date passée » doivent toujours passer. (Vous reviendrez sur cette méthode
-pour #15, #21, #22 — envisagez de tout corriger d'un coup.)
+pour #11, #12 et #15 — envisagez de tout corriger d'un coup.)
 
 ---
 
-### 16. Getters et setters qui n'encapsulent rien
+### 10. Getters et setters qui n'encapsulent rien
 
 **Le smell.** Des paires `getX()`/`setX()` sur une classe dont les champs sont
 déjà publics. Elles ajoutent de la cérémonie sans ajouter de protection : pas
@@ -268,7 +268,7 @@ modifier chaque champ.
 
 ---
 
-### 21. Un test flaky
+### 11. Un test flaky
 
 **Le smell.** Un des tests est flaky (instable) : il joue le même code, les mêmes entrées, mais on voit un résultat différent
 d'un run à l'autre. Le coupable habituel est une dépendance à quelque chose que
@@ -299,7 +299,7 @@ votre message de commit quelle race condition se jouait, et entre quoi.
 
 ---
 
-### 22. Variables locales promues en champs
+### 12. Variables locales promues en champs (mauvais scope de variable)
 
 **Le smell.** Une valeur qui ne sert que le temps d'un appel de méthode est
 stockée dans l'objet au lieu d'une variable locale. Elle a désormais l'air
@@ -309,7 +309,8 @@ qui est en soi le signe qu'elle n'a jamais été de l'état.
 
 **Comment le détecter.** Pour chaque champ, demandez-vous : « est-il lu par
 plus d'une méthode ? Est-ce qu'il veut dire quelque chose entre deux
-appels ? » Les champs typés `| undefined` sans initialiseur méritent suspicion.
+appels ? Est-il à sa place ? ».
+ Les champs typés `| undefined` sans initialiseur méritent suspicion.
 Cherchez le nom de chacun de ces champs et comptez les méthodes qui le
 touchent.
 
@@ -321,7 +322,7 @@ champs de la classe ne devrait contenir que ce qui décrit un `Product`.
 
 ---
 
-### 7. `Error` générique pour des violations métier
+### 13. `Error` générique pour des violations métier
 
 **Le smell.** `throw new Error("some message")` pour une règle métier.
 L'appelant ne peut distinguer « pas assez de stock » de « la base a explosé »
@@ -348,7 +349,7 @@ messages — ils restent utiles pour les humains.
 Ces smells s'étendent sur plusieurs méthodes, ou concernent une méthode qui a
 accumulé trop de responsabilités. Vous allez extraire des choses.
 
-### 3. Code dupliqué
+### 14. Code dupliqué
 
 **Le smell.** Le même bloc de logique apparaît à deux endroits avec une petite
 variation. Chaque bug doit maintenant être corrigé deux fois, et les deux
@@ -369,7 +370,7 @@ doivent toujours passer.
 
 ---
 
-### 15. Floating promise
+### 15. une promesse en l'air (promise incomplète ou flottante)
 
 **Le smell.** Un appel `async` dont la promise retournée n'est ni awaitée ni
 gérée. La méthode retourne avant que le travail soit terminé ; si le travail
@@ -392,7 +393,7 @@ observerait avant et après, et pourquoi la suite de tests ne l'a pas détecté.
 
 ---
 
-### 24. Tout ce qui cloche dans `addImage()`, d'un coup
+### 16. Tout ce qui cloche dans `addImage()`, d'un coup
 
 **Le smell.** Une seule méthode qui viole plusieurs règles en même temps :
 imbrication profonde sans early exits, validation de chaîne bricolée au lieu
@@ -419,7 +420,7 @@ documente le comportement choisi.
 
 ---
 
-### 25. Des fallbacks qui font chacun *quelque chose* — sans cohérence
+### 17. Des fallbacks qui font chacun *quelque chose* — sans cohérence
 
 **Le smell.** Chaque branche `else` a un comportement, donc rien n'a l'air
 vide — mais ces comportements ne suivent aucune politique. Un enregistrement
@@ -434,7 +435,7 @@ deuxième colonne mélange « lever une erreur » et « substitution silencieuse
 pour des conditions du même genre, il n'y a pas de politique — juste des
 accidents.
 
-**Indice.** Même méthode que #24 : la boucle de matching des fournisseurs.
+**Indice.** Même méthode que #16 : la boucle de matching des fournisseurs.
 Notez quelle branche lit un champ qui n'a rien à voir avec les fournisseurs.
 
 **Attendu de votre part.** Une politique explicite (dans un commentaire ou
@@ -467,7 +468,7 @@ classe qui prouve qu'elles sont d'accord.
 Ici, vous allez ajouter des méthodes à *d'autres* classes et repenser la façon
 dont les données circulent.
 
-### 17. « Tell, don't ask » — fouiller dans les collaborateurs
+### 19. « Tell, don't ask » — fouiller dans les collaborateurs
 
 **Le smell.** Une méthode extrait des champs bruts d'un autre objet et prend
 des décisions avec, au lieu de demander à cet objet de faire le travail (ou
@@ -480,10 +481,10 @@ même.
 dans `Product`, demandez-vous : « `<collaborator>` pourrait-il répondre à une
 question plutôt que de rendre un champ ? » Comptez dans combien de
 collaborateurs différents `Product` va piocher. Vérifiez aussi si `Product`
-contourne une méthode existante du collaborateur (voir #16).
+contourne une méthode existante du collaborateur (voir #10).
 
 **Indice.** Au moins quatre endroits, impliquant trois classes collaboratrices
-différentes. L'un est aussi #13. Un autre est aussi #18.
+différentes. L'un est aussi le #6. Un autre est aussi le #18.
 
 **Attendu de votre part.** De nouvelles méthodes sur `Supplier`, `Warehouse`,
 `Price` qui expriment l'intention (quoi notifier, comment se décrire, combien
@@ -492,7 +493,7 @@ collaborateurs.
 
 ---
 
-### 10. `Map` en mémoire vs table de jointure
+### 20. `Map` en mémoire vs table de jointure
 
 **Le smell.** Un champ persisté via une table de jointure, mais stocké en
 mémoire dans une simple `Map`, sans code de chargement en vue. Chaque lecture
@@ -513,7 +514,7 @@ périmée. Notez par écrit l'invariant que vous garantissez.
 
 ---
 
-### 4. Primitive obsession — le statut en simple `string`
+### 21. Primitive obsession — le statut en simple `string`
 
 **Le smell.** Un concept avec des règles (un cycle de vie avec des transitions
 autorisées) représenté par une union de chaînes. Les types union bloquent les
@@ -539,7 +540,7 @@ fois et garanties. Des tests pour chaque transition interdite.
 C'est pour ces smells que l'exercice existe. Attendez-vous à créer de nouveaux
 fichiers.
 
-### 5. L'état en mémoire et la base divergent en cas d'échec
+### 22. L'état en mémoire et la base divergent en cas d'échec
 
 **Le smell.** On mute l'objet, puis on persiste. Si la persistance throw,
 l'objet ment déjà : le stock a été « vendu » en mémoire, mais pas en base.
@@ -560,7 +561,7 @@ l'objet ensuite.
 
 ---
 
-### 6. Un tableau qui grandit indéfiniment
+### 23. Un tableau qui grandit indéfiniment
 
 **Le smell.** Une collection dans laquelle on ajoute à plusieurs endroits et
 qu'on ne vide nulle part. Sur un objet à longue durée de vie, c'est une fuite
@@ -576,11 +577,11 @@ donne rien, vous l'avez trouvé.
 
 **Attendu de votre part.** Un responsable du cycle de vie — quelque chose qui
 les flush, les envoie ou les persiste, puis les vide. Et décidez si ce
-responsable doit vraiment être `Product` (voir #2).
+responsable doit vraiment être `Product` (voir #24).
 
 ---
 
-### 2. Feature envy — `Product` fabrique des notifications
+### 24. Feature envy — `Product` fabrique des notifications
 
 **Le smell.** Une classe fait un travail qui appartient à un autre concept.
 `Product` connaît les sujets des emails, les templates de corps, et une
@@ -594,7 +595,7 @@ vocabulaire utilisent-ils ? Si une méthode serait tout aussi à sa place dans
 une classe nommée `NotificationService`, elle est envieuse.
 
 **Indice.** Les méthodes de cycle de vie et le helper privé en bas de
-`Product`. C'est aussi là que vivent #3 et #6 — ce sont les symptômes de la
+`Product`. C'est aussi là que vivent #14 et #23 — ce sont les symptômes de la
 même responsabilité mal placée.
 
 **Attendu de votre part.** Un collaborateur dédié, responsable de la
@@ -604,7 +605,7 @@ nouveau collaborateur ne devraient même pas avoir besoin d'un `Product`.
 
 ---
 
-### 1. God class — l'objectif final
+### 25. God class — l'objectif final
 
 **Le smell.** Une classe qui est à la fois une entité métier, son propre
 repository, un système de notification, un moteur de tarification et un
@@ -620,7 +621,7 @@ entière. Puis regardez les imports en haut du fichier — que fait une entité
 métier en train d'importer un client de base de données ?
 
 **Indice.** Vous avez déjà fait l'essentiel du travail si vous avez corrigé
-#2, #4, #5, #6, #17. Reste à déplacer chaque appel `prisma.*` hors de
+#19, #21, #22, #23 et #24. Reste à déplacer chaque appel `prisma.*` hors de
 `Product`, vers un objet dont le rôle est la persistance, et à rendre
 `Product` instanciable sans rien de tout ça.
 
@@ -641,24 +642,24 @@ Le fichier de test a deux parties, et c'est voulu :
 - Les **tests de nommage** (en haut du fichier) testent les noms que le code
   *devrait* avoir. Ils utilisent `as any`, donc ils compilent contre le code
   abrégé actuel et échouent au runtime avec un message descriptif. Ils
-  échouent tous aujourd'hui. C'est votre checklist pour le smell #11.
+  échouent tous aujourd'hui. C'est votre checklist pour le smell #1.
 - Les **tests de comportement** (à partir de `// --- Domain behavior ---`)
   figent ce que chaque méthode fait réellement. Ils utilisent les noms
   actuels. Ils doivent continuer à passer du début à la fin — c'est votre
   filet de sécurité pour chaque refactoring de cette liste. L'un d'eux est
-  flaky exprès (#21).
+  flaky exprès (#11).
 
 Prisma est remplacé par un stub via `vi.mock`, donc la suite tourne sans base
 de données. Aucun test ne vérifie les appels Prisma. Laissez ça en l'état
-jusqu'à ce que vous arriviez à #5 et #1.
+jusqu'à ce que vous arriviez à #22 et #25.
 
 ## Ordre de travail suggéré
 
-1. Niveau 1 (11, 12, 9, 8, 23, 13, 14) — un commit chacun, une heure au total.
-2. Niveau 2 (19, 20, 16, 21, 22, 7) — les trois smells de `addDiscount()`
-   (20, 21, 22) se traitent de préférence en une seule session.
-3. Niveau 3 (3, 15, 24, 25, 18) — `addImage()` (24, 25) aussi en une session.
-4. Niveau 4 (17, 10, 4) — vous commencerez à modifier `Supplier`, `Warehouse`,
+1. Niveau 1 (1 à 7) — un commit chacun, une heure au total.
+2. Niveau 2 (8 à 13) — les trois smells de `addDiscount()` (9, 11, 12) se
+   traitent de préférence en une seule session.
+3. Niveau 3 (14 à 18) — `addImage()` (16, 17) aussi en une session.
+4. Niveau 4 (19 à 21) — vous commencerez à modifier `Supplier`, `Warehouse`,
    `Price`.
-5. Niveau 5 (5, 6, 2, 1) — nouveaux fichiers, nouvelles classes, et la preuve
+5. Niveau 5 (22 à 25) — nouveaux fichiers, nouvelles classes, et la preuve
    finale : `Product` testé sans mock.
