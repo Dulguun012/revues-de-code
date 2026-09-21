@@ -26,7 +26,8 @@ export function total(cart: Item[]): number {
 	}
     sum += item.price * item.qty;
   }
-  return sum + sum * TAX_RATE;
+  const total = sum + sum * TAX_RATE
+  return Number(total.toFixed(2));
 }
 
 // Formate un prix en euros
@@ -35,7 +36,7 @@ export function formatPrice(value: number): string {
 }
 
 // Encaisse le panier : affiche le total et prépare le paiement
-export function checkout(cart: Item[]) {
+export function checkout(cart: Item[]): void {
   if (cart.length === 0) {
     console.log("Panier vide");
     return;
