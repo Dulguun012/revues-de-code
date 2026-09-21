@@ -18,6 +18,12 @@ const TAX_RATE = 0.2;
 export function total(cart: Item[]): number {
   let sum = 0;
   for (const item of cart) {
+	if(!Number.isFinite(item.price) || item.price < 0) {
+		throw new Error("Prix invalide");
+	}
+	if(!Number.isFinite(item.qty) || item.qty <= 0) {
+		throw new Error("Quantité invalide");
+	}
     sum += item.price * item.qty;
   }
   return sum + sum * TAX_RATE;
