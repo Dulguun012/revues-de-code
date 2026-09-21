@@ -14,11 +14,7 @@
 
 ## 1. Identification de l'équipe
 
-- **Préfixe : 2026-IUT-BUT3-MUNKHERDENE
-  - `année` = année universitaire (ex. `2026`)
-  - `etablissement` = établissement et promotion (ex. `IUT-BUT3`)
-  - `groupe` = nom de famille du porteur, **sans accent, en majuscules**
-    (ex. `DUPONT`, `LEFEVRE`, `MARTIN-GARCIA`)
+- **Préfixe : 2026-IUT-BUT3-MUNKH-ERDENE
 - **Porteur de l'équipe : Munkh-Erdene Dulguun (Dulguun012)
 
 ## 2. Étudiants de l'équipe
@@ -31,7 +27,7 @@
 
 ## 3. Rendu
 
-- **TD :** (ex. `TD1`)
+- **TD :`TD1`
 - **Lien de la PR :** (à coller une fois la PR ouverte)
 
 ## 4. Note — réservée à l'enseignant
