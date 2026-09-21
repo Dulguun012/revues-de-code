@@ -14,7 +14,7 @@
 
 ## 1. Identification de l'équipe
 
-- **Préfixe :** `<année>-<etablissement>-<groupe>` — ex. `2026-IUT-BUT3-DUPONT`
+- **Préfixe :2026-IUT-BUT3-MUNKHERDENE
   - `année` = année universitaire (ex. `2026`)
   - `etablissement` = établissement et promotion (ex. `IUT-BUT3`)
   - `groupe` = nom de famille du porteur, **sans accent, en majuscules**
@@ -25,7 +25,7 @@
 
 | Nom (état civil) | Pseudo GitHub | Rôle |
 |------------------|---------------|------|
-|                  |               | porteur |
+| MUNKH-ERDENE     |   Dulguun     | porteur |
 |                  |               | membre |
 |                  |               | membre |
 
