@@ -14,18 +14,18 @@
 
 ## 1. Identification de l'équipe
 
-- **Préfixe :2026-IUT-BUT3-MUNKHERDENE
+- **Préfixe : 2026-IUT-BUT3-MUNKHERDENE
   - `année` = année universitaire (ex. `2026`)
   - `etablissement` = établissement et promotion (ex. `IUT-BUT3`)
   - `groupe` = nom de famille du porteur, **sans accent, en majuscules**
     (ex. `DUPONT`, `LEFEVRE`, `MARTIN-GARCIA`)
-- **Porteur de l'équipe :** (nom + pseudo GitHub)
+- **Porteur de l'équipe : Munkh-Erdene Dulguun (Dulguun012)
 
 ## 2. Étudiants de l'équipe
 
 | Nom (état civil) | Pseudo GitHub | Rôle |
 |------------------|---------------|------|
-| MUNKH-ERDENE     |   Dulguun     | porteur |
+| MUNKH-ERDENE     |   Dulguun012  | porteur |
 |                  |               | membre |
 |                  |               | membre |
 
