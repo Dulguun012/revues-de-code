@@ -311,8 +311,7 @@ export class Product {
     this.updatedAt = new Date();
 
     if (this.stock === 0) {
-      this.nextStat = "out_of_stock";
-      this.status = this.nextStat as ProductStatus;
+      this.status = "out_of_stock";
     }
 
     await prisma.product.update({
