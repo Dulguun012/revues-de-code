@@ -594,3 +594,17 @@ describe("collaborators answer questions (tell, don't ask)", () => {
     expect(() => price.changeMargin(-5)).toThrow("Invalid margin: -5");
   });
 });
+
+
+describe("hydrateSuppliers()", () => {
+  it("replaces the in-memory map with the join-table rows", () => {
+    const product = makeTypedProduct();
+    product.suppliersRegions.set("OLD", new Supplier("s0", "Old Co", "old@example.com", "OLD"));
+    const acme = new Supplier("s1", "Acme Corp", "acme@example.com", "EU");
+
+    product.hydrateSuppliers([{ region: "EU", supplier: acme }]);
+
+    expect([...product.suppliersRegions.keys()]).toEqual(["EU"]);
+    expect(product.suppliersRegions.get("EU")).toBe(acme);
+  });
+});

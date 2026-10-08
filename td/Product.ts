@@ -277,6 +277,16 @@ export class Product {
     });
   }
 
+  /**
+   * Invariant: suppliersRegions mirrors the ProductSupplier join table.
+   * - Writes: only addSupplierToRegion() (memory + upsert).
+   * - Reads: whoever loads a Product from the database MUST call
+   *   hydrateSuppliers() with its ProductSupplier rows (the repository, see #25).
+   */
+  hydrateSuppliers(rows: { region: string; supplier: Supplier }[]): void {
+    this.suppliersRegions = new Map(rows.map((row) => [row.region, row.supplier]));
+  }
+
   // --- Pricing ---
 
   getResellerPrice(): number {
