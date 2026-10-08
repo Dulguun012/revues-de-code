@@ -66,7 +66,7 @@ export class Price {
     const vatAmount = (marginAmount * this.vat) / 100;
     return this.amount + marginAmount + vatAmount;
   }
-  
+
 }
 
 export class Product {
@@ -87,8 +87,6 @@ export class Product {
   updatedAt: Date;
   notifications: Notification[] = [];
   validUntil: Date | null = null;
-  nextStat: ProductStatus | undefined;
-  dscSnapshot: string[] | undefined;
 
   constructor(
     id: string,
