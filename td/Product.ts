@@ -1,12 +1,12 @@
 // Translated from Models/{Product,Price,Notification,Supplier,Warehouse}.cs
 //
-// The C# version kept two representations of the same data in sync by hand:
-// domain fields marked [NotMapped] (Price, Discounts, Images, SuppliersRegions,
-// Warehouse) plus flattened EF columns (PriceAmount/DiscountsCsv/ImagesJson/...),
-// reconciled via SyncEfColumns()/HydrateFromEfColumns(). Prisma maps Decimal,
-// String[] and Json columns natively (see schema.prisma), so that flattening
-// and the two sync methods are gone: PrismaClient reads/writes plain objects
-// and there is exactly one representation of each field.
+// Prisma maps String[] and Json columns natively (see schema.prisma), so
+// discounts and images no longer need the CSV/JSON flattening of the C# version.
+//
+// WARNING: Price is still stored as flattened columns (e.g. priceMargin).
+// The in-memory Price object and these columns are kept in sync BY HAND in
+// each mutator (see setMargin()). This is discipline, not a real constraint:
+// any code that changes a Price field must also persist the matching column.
 
 import { PrismaClient, Prisma } from "@prisma/client";
 
