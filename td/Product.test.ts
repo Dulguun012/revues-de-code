@@ -563,3 +563,15 @@ describe("addImage() fallback policy", () => {
     expect(product.images["hero"]).toBe("http://img/hero-v2.png");
   });
 });
+
+
+describe("Product.getResellerPrice() value", () => {
+  it("returns amount + margin + VAT on margin (50 -> 56)", () => {
+    const product = makeTypedProduct(); // price = 50 EUR
+    product.price.margin = 10;
+    product.price.vat = 20;
+
+    // margin = 5, vat on margin = 1 -> 50 + 5 + 1
+    expect(product.getResellerPrice()).toBe(56);
+  });
+});
