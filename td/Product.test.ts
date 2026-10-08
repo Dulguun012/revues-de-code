@@ -146,30 +146,16 @@ describe("Product", () => {
     expect(hasProp(product, "status"), "Product should have a property named `status` (not an abbreviation)").toBe(true);
     expect(product.status).toBe("active");
 
-    expect(hasProp(product, "notifications"), "Product should have a property named `notifications` (not an abbreviation)").toBe(true);
-    expect(product.notifications).toEqual([]);
   });
 
-  it("sell() pushes a notification with proper field names: recipient, subject, body, channel, productId", async () => {
+  it("sell() records a 'sold' fact instead of building emails", async () => {
     const product = makeProduct();
-    product.suppliersRegions.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", "EU"));
 
     await product.sell(1);
 
-    expect(product.notifications.length, "sell() should push exactly one notification per regional supplier").toBe(1);
-    const notification = product.notifications[0];
-
-    expect(hasProp(notification, "recipient"), "Notification should have a property named `recipient` (not an abbreviation)").toBe(true);
-    expect(notification.recipient).toBe("acme@example.com");
-
-    expect(hasProp(notification, "subject"), "Notification should have a property named `subject` (not an abbreviation)").toBe(true);
-    expect(hasProp(notification, "body"), "Notification should have a property named `body` (not an abbreviation)").toBe(true);
-
-    expect(hasProp(notification, "channel"), "Notification should have a property named `channel` (not an abbreviation)").toBe(true);
-    expect(notification.channel).toBe("email");
-
-    expect(hasProp(notification, "productId"), "Notification should have a property named `productId` (not an abbreviation)").toBe(true);
-    expect(notification.productId).toBe("p1");
+    expect(product.pullEvents()).toEqual([
+      { type: "sold", productId: "p1", productName: "Wireless Mouse", quantity: 1, remainingStock: 99 },
+    ]);
   });
 });
 
@@ -277,14 +263,14 @@ describe("sell()", () => {
     expect(product.stock).toBe(100);
   });
 
-  it("pushes one notification per regional supplier", async () => {
+  it("records one 'sold' event per sale, whatever the number of suppliers", async () => {
     const product = makeTypedProduct();
     product.suppliersRegions.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", "EU"));
     product.suppliersRegions.set("US", new Supplier("s2", "Widget Inc", "widget@example.com", "US"));
 
     await product.sell(1);
 
-    expect(product.notifications.length).toBe(2);
+    expect(product.pullEvents().length).toBe(1);
   });
 });
 
@@ -298,14 +284,12 @@ describe("deprecate()", () => {
     expect(product.stock).toBe(0);
   });
 
-  it("notifies every regional supplier plus a customer-facing notification", async () => {
+  it("records a 'deprecated' event", async () => {
     const product = makeTypedProduct();
-    product.suppliersRegions.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", "EU"));
 
     await product.deprecate();
 
-    // 1 supplier notification + 1 customer notification
-    expect(product.notifications.length).toBe(2);
+    expect(product.pullEvents()).toEqual([{ type: "deprecated", productId: "p1", productName: "Wireless Mouse" }]);
   });
 });
 
@@ -658,20 +642,17 @@ describe("consistency when the database write fails", () => {
 
     expect(product.stock).toBe(100);
     expect(product.status).toBe("active");
-    expect(product.notifications).toEqual([]);
+    expect(product.pullEvents()).toEqual([]);
   });
 });
 
 
-describe("pullNotifications()", () => {
-  it("returns the pending notifications and empties the list", async () => {
+describe("pullEvents()", () => {
+  it("returns the recorded events and empties the list", async () => {
     const product = makeTypedProduct();
-    product.suppliersRegions.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", "EU"));
     await product.sell(1);
 
-    const pulled = product.pullNotifications();
-
-    expect(pulled.length).toBe(1);
-    expect(product.notifications).toEqual([]);
+    expect(product.pullEvents().length).toBe(1);
+    expect(product.pullEvents()).toEqual([]);
   });
 });
