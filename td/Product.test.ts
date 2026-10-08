@@ -468,3 +468,13 @@ describe("addSupplierToRegion()", () => {
     );
   });
 });
+
+
+describe("Price defaults", () => {
+  it("uses a 15% default margin and a 20% default VAT", () => {
+    const price = new Price(100, "EUR");
+
+    expect(price.margin).toBe(15);
+    expect(price.vat).toBe(20);
+  });
+});

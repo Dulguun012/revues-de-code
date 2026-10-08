@@ -43,6 +43,11 @@ export class Warehouse {
   ) {}
 }
 
+/** Default margin applied to a price, in percent. Business decision: change it here only. */
+export const DEFAULT_MARGIN_PERCENT = 15;
+/** Default VAT, in percent, applied on the margin only. */
+export const DEFAULT_VAT_PERCENT = 20;
+
 export class Price {
   amount: number;
   currency: string;
@@ -52,8 +57,8 @@ export class Price {
   constructor(amount: number, currency: string) {
     this.amount = amount;
     this.currency = currency;
-    this.margin = 15;
-    this.vat = 20;
+    this.margin = DEFAULT_MARGIN_PERCENT;
+    this.vat = DEFAULT_VAT_PERCENT;
   }
 
   getResellerPrice(): number {
