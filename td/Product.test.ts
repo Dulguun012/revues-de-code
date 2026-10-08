@@ -575,3 +575,22 @@ describe("Product.getResellerPrice() value", () => {
     expect(product.getResellerPrice()).toBe(56);
   });
 });
+
+
+describe("collaborators answer questions (tell, don't ask)", () => {
+  it("Supplier.imageKeySuffix() follows the fallback policy", () => {
+    expect(new Supplier("s1", "Acme Corp", "acme@example.com", "EU").imageKeySuffix()).toBe("Acme Corp");
+    expect(new Supplier("s1", "Acme Corp", "", "EU").imageKeySuffix()).toBe("supplier");
+    expect(new Supplier("s1", "Acme Corp", "acme@example.com", "").imageKeySuffix()).toBeNull();
+    expect(() => new Supplier("s1", "Acme Corp", "not-an-email", "EU").imageKeySuffix()).toThrow(SupplierError);
+  });
+
+  it("Price.changeMargin() updates the margin and rejects invalid values", () => {
+    const price = new Price(100, "EUR");
+
+    price.changeMargin(10);
+
+    expect(price.margin).toBe(10);
+    expect(() => price.changeMargin(-5)).toThrow("Invalid margin: -5");
+  });
+});
