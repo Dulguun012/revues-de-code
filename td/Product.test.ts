@@ -524,3 +524,29 @@ describe("business errors are typed", () => {
     await expect(product.addSupplierToRegion("APAC", [])).rejects.toBeInstanceOf(SupplierError);
   });
 });
+
+
+describe("addImage() edge cases", () => {
+  it("gives an honest error for an empty url", async () => {
+    await expect(makeTypedProduct().addImage("hero", "")).rejects.toThrow("url is required");
+  });
+
+  it("accepts an uppercase HTTP scheme", async () => {
+    const product = makeTypedProduct();
+
+    await product.addImage("hero", "HTTP://img/hero.png");
+
+    expect(product.images.hero).toBe("HTTP://img/hero.png");
+  });
+
+  it("uses the first registered supplier when several are eligible", async () => {
+    const product = makeTypedProduct();
+    product.suppliersRegions.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", "EU"));
+    product.suppliersRegions.set("US", new Supplier("s2", "Widget Inc", "widget@example.com", "US"));
+    await product.addImage("hero", "http://img/hero-v1.png");
+
+    await product.addImage("hero", "http://img/hero-v2.png");
+
+    expect(product.images["hero-Acme Corp"]).toBe("http://img/hero-v2.png");
+  });
+});

@@ -81,6 +81,22 @@ export class Price {
 
 }
 
+/** True if the value is a real http(s) URL (case-insensitive scheme). */
+function isHttpUrl(value: string): boolean {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isValidEmail(value: string): boolean {
+  return EMAIL_PATTERN.test(value);
+}
+
 export class Product {
   id: string;
   name: string;
@@ -139,51 +155,42 @@ export class Product {
 
   // --- Catalog / images / discounts ---
 
-  async addImage(ctx: string, url: string): Promise<void> {
-    if (url) {
-      if (url.substring(0, 4) === "http") {
-        if (!(this.images[ctx] === undefined)) {
-          let k = ctx;
-          for (const [, s] of this.suppliersRegions) {
-            if (s.region) {
-              if (s.email) {
-                if (s.email.indexOf("@") > 0 && s.email.indexOf(".", s.email.indexOf("@")) > s.email.indexOf("@")) {
-                  k = ctx + "-" + s.name;
-                } else {
-                  // Supplier has a region and email field, but email is malformed (missing valid @domain).
-                  // Treat as a data integrity error: throw instead of gracefully degrading.
-                  throw new SupplierError(`Supplier ${s.name} has a malformed email: ${s.email}`);
-                }
-              } else {
-                // Supplier has a region but NO email field (empty string, falsy).
-                // Fall back to generic "-supplier" marker, losing the supplier's identity.
-                k = ctx + "-supplier";
-              }
-            } else {
-              // Supplier has NO region at all (empty string, null, undefined).
-              // Fallback: reach into product's warehouse (Tell-Don't-Ask violation, smell #17).
-              // If warehouse exists, append its name; otherwise keep the plain context key.
-              k = this.warehouse ? ctx + "-" + this.warehouse.name : ctx;
-            }
-          }
-          this.images[k] = url;
-        } else {
-          this.images[ctx] = url;
-        }
-        this.updatedAt = new Date();
-        await prisma.product.update({
-          where: { id: this.id },
-          data: { images: this.images as Prisma.InputJsonValue, updatedAt: this.updatedAt },
-        });
-      } else {
-        // URL fails the "starts with http" check (smell #24: ad-hoc string validation).
-        throw new ImageError("url must start with http");
-      }
-    } else {
-      // URL is falsy (empty string, null, undefined).
-      // Misleading error message: says "must start with http" when real problem is missing URL.
+  async addImage(context: string, url: string): Promise<void> {
+    if (!url) {
+      throw new ImageError("url is required");
+    }
+    if (!isHttpUrl(url)) {
       throw new ImageError("url must start with http");
     }
+
+    const isNewContext = this.images[context] === undefined;
+    const key = isNewContext ? context : this.keyForExistingImage(context);
+
+    this.images[key] = url;
+    this.updatedAt = new Date();
+    await prisma.product.update({
+      where: { id: this.id },
+      data: { images: this.images as Prisma.InputJsonValue, updatedAt: this.updatedAt },
+    });
+  }
+
+  /**
+   * Key used when an image already exists for this context.
+   * Several suppliers: the FIRST supplier registered (insertion order) decides.
+   */
+  private keyForExistingImage(context: string): string {
+    const suppliers = [...this.suppliersRegions.values()];
+    if (suppliers.length === 0) return context;
+
+    const supplier = suppliers[0];
+    if (!supplier.region) {
+      return this.warehouse ? `${context}-${this.warehouse.name}` : context;
+    }
+    if (!supplier.email) return `${context}-supplier`;
+    if (!isValidEmail(supplier.email)) {
+      throw new SupplierError(`Supplier ${supplier.name} has a malformed email: ${supplier.email}`);
+    }
+    return `${context}-${supplier.name}`;
   }
 
   getValidUntil(): Date | null {
