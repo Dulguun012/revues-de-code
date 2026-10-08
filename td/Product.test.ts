@@ -26,7 +26,7 @@ vi.mock("@prisma/client", () => ({
   Prisma: {},
 }));
 
-import { Product, Price, Supplier, Warehouse, StockError, DiscountError, ImageError, SupplierError } from "./Product";
+import { Product, Price, Supplier, Warehouse, StockError, DiscountError, ImageError, SupplierError, StatusError } from "./Product";
 
 function hasProp(obj: unknown, propName: string): boolean {
   return typeof obj === "object" && obj !== null && propName in (obj as object);
@@ -606,5 +606,38 @@ describe("hydrateSuppliers()", () => {
 
     expect([...product.suppliersRegions.keys()]).toEqual(["EU"]);
     expect(product.suppliersRegions.get("EU")).toBe(acme);
+  });
+});
+
+
+describe("status transitions", () => {
+  it("cannot sell a deprecated product", async () => {
+    const product = makeTypedProduct();
+    await product.deprecate();
+
+    await expect(product.sell(1)).rejects.toBeInstanceOf(StatusError);
+  });
+
+  it("cannot restock a deprecated product", async () => {
+    const product = makeTypedProduct();
+    await product.deprecate();
+
+    await expect(product.receiveStock(10)).rejects.toBeInstanceOf(StatusError);
+  });
+
+  it("cannot deprecate twice", async () => {
+    const product = makeTypedProduct();
+    await product.deprecate();
+
+    await expect(product.deprecate()).rejects.toBeInstanceOf(StatusError);
+  });
+
+  it("goes back to active when an out-of-stock product is restocked", async () => {
+    const product = makeTypedProduct();
+    await product.sell(100);
+
+    await product.receiveStock(5);
+
+    expect(product.status).toBe("active");
   });
 });
