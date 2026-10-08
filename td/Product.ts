@@ -66,30 +66,7 @@ export class Price {
     const vatAmount = (marginAmount * this.vat) / 100;
     return this.amount + marginAmount + vatAmount;
   }
-
-  getAmt(): number {
-    return this.amount;
-  }
-
-  setAmt(amount: number): void {
-    this.amount = amount;
-  }
-
-  getCcy(): string {
-    return this.currency;
-  }
-
-  setCcy(currency: string): void {
-    this.currency = currency;
-  }
-
-  getMgn(): number {
-    return this.margin;
-  }
-
-  setMgn(margin: number): void {
-    this.margin = margin;
-  }
+  
 }
 
 export class Product {
