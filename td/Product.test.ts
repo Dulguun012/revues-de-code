@@ -478,3 +478,15 @@ describe("Price defaults", () => {
     expect(price.vat).toBe(20);
   });
 });
+
+
+describe("receiveStock() without warehouse", () => {
+  it("does not crash and still updates stock when warehouse is null", async () => {
+    const product = makeTypedProduct(); // warehouse = null
+
+    await product.receiveStock(20);
+
+    expect(product.stock).toBe(120);
+    expect(product.quantity).toBe(120);
+  });
+});
