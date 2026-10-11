@@ -138,6 +138,19 @@ function isValidEmail(value: string): boolean {
   return EMAIL_PATTERN.test(value);
 }
 
+/** Every mutable field of a Product, used to undo a change. */
+export interface ProductSnapshot {
+  discounts: string[];
+  images: Record<string, string>;
+  suppliersRegions: Map<string, Supplier>;
+  quantity: number;
+  stock: number;
+  status: ProductStatus;
+  margin: number;
+  validUntil: Date | null;
+  updatedAt: Date;
+}
+
 export class Product {
   id: string;
   name: string;
@@ -218,15 +231,18 @@ export class Product {
       throw new ImageError("url must start with http");
     }
 
+    const before = this.snapshot();
     const isNewContext = this.images[context] === undefined;
     const key = isNewContext ? context : this.keyForExistingImage(context);
 
     this.images[key] = url;
     this.updatedAt = new Date();
-    await prisma.product.update({
-      where: { id: this.id },
-      data: { images: this.images as Prisma.InputJsonValue, updatedAt: this.updatedAt },
-    });
+    await this.persistOrRollback(before, () =>
+      prisma.product.update({
+        where: { id: this.id },
+        data: { images: this.images as Prisma.InputJsonValue, updatedAt: this.updatedAt },
+      }),
+    );
   }
 
   /**
@@ -263,11 +279,6 @@ export class Product {
     if (!dscCode) {
       throw new DiscountError("Discount code cannot be empty");
     }
-
-    // Sanity-check the discount code isn't already applied by
-    // round-tripping the list through JSON — cheap, and guards
-    // against any non-serializable junk sneaking into `dscs`.
-
     if (validUntil < new Date()) {
       throw new DiscountError("validUntil cannot be in the past");
     }
@@ -275,13 +286,16 @@ export class Product {
       throw new DiscountError("Cannot have more than 2 discounts at the same time");
     }
 
+    const before = this.snapshot();
     this.discounts.push(dscCode);
     this.setValidUntil(validUntil);
     this.updatedAt = new Date();
-    await prisma.product.update({
-      where: { id: this.id },
-      data: { discounts: this.discounts, updatedAt: this.updatedAt },
-    });
+    await this.persistOrRollback(before, () =>
+      prisma.product.update({
+        where: { id: this.id },
+        data: { discounts: this.discounts, updatedAt: this.updatedAt },
+      }),
+    );
   }
 
   // --- Suppliers ---
@@ -290,14 +304,17 @@ export class Product {
     const s = suppliers.find((x) => x.region === region);
     if (!s) throw new SupplierError(`No supplier found for region ${region}`);
 
+    const before = this.snapshot();
     this.suppliersRegions.set(region, s);
     this.updatedAt = new Date();
 
-    await prisma.productSupplier.upsert({
-      where: { productId_region: { productId: this.id, region: region } },
-      create: { productId: this.id, region: region, supplierId: s.id },
-      update: { supplierId: s.id },
-    });
+    await this.persistOrRollback(before, () =>
+      prisma.productSupplier.upsert({
+        where: { productId_region: { productId: this.id, region: region } },
+        create: { productId: this.id, region: region, supplierId: s.id },
+        update: { supplierId: s.id },
+      }),
+    );
   }
 
   /**
@@ -317,18 +334,23 @@ export class Product {
   }
 
   async setMargin(marginPercent: number): Promise<void> {
+    const before = this.snapshot();
     this.price.changeMargin(marginPercent);
     this.updatedAt = new Date();
-    await prisma.product.update({
-      where: { id: this.id },
-      data: { priceMargin: marginPercent, updatedAt: this.updatedAt },
-    });
+    await this.persistOrRollback(before, () =>
+      prisma.product.update({
+        where: { id: this.id },
+        data: { priceMargin: marginPercent, updatedAt: this.updatedAt },
+      }),
+    );
   }
 
   // --- Stock ---
 
   async receiveStock(qty: number): Promise<void> {
     this.assertNotDeprecated("restock");
+
+    const before = this.snapshot();
     this.stock += qty;
     this.quantity += qty;
     if (this.status === "out_of_stock" && this.stock > 0) {
@@ -340,29 +362,32 @@ export class Product {
     } else {
       console.log(`Restocking ${this.name} (no warehouse assigned)`);
     }
-    await prisma.product.update({
-      where: { id: this.id },
-      data: { stock: this.stock, quantity: this.quantity, updatedAt: this.updatedAt },
-    });
+    await this.persistOrRollback(before, () =>
+      prisma.product.update({
+        where: { id: this.id },
+        data: { stock: this.stock, quantity: this.quantity, status: this.status, updatedAt: this.updatedAt },
+      }),
+    );
   }
 
   async sell(qty: number): Promise<void> {
     this.assertNotDeprecated("sell");
     if (this.stock < qty) throw new StockError("Not enough stock");
 
+    const before = this.snapshot();
     this.stock -= qty;
     this.updatedAt = new Date();
-
     if (this.stock === 0 && this.status !== "out_of_stock") {
       this.transitionTo("out_of_stock");
     }
 
-    await prisma.product.update({
-      where: { id: this.id },
-      data: { stock: this.stock, status: this.status, updatedAt: this.updatedAt },
-    });
+    await this.persistOrRollback(before, () =>
+      prisma.product.update({
+        where: { id: this.id },
+        data: { stock: this.stock, status: this.status, updatedAt: this.updatedAt },
+      }),
+    );
 
-    // Notify all regional suppliers
     this.notifyAllSuppliers(
       `Product sold: ${this.name}`,
       `${qty} unit(s) of ${this.name} were sold. Remaining stock: ${this.stock}.`,
@@ -372,16 +397,18 @@ export class Product {
   // --- Lifecycle ---
 
   async deprecate(): Promise<void> {
+    const before = this.snapshot();
     this.transitionTo("deprecated");
     this.stock = 0;
     this.updatedAt = new Date();
 
-    await prisma.product.update({
-      where: { id: this.id },
-      data: { status: this.status, stock: this.stock, updatedAt: this.updatedAt },
-    });
+    await this.persistOrRollback(before, () =>
+      prisma.product.update({
+        where: { id: this.id },
+        data: { status: this.status, stock: this.stock, updatedAt: this.updatedAt },
+      }),
+    );
 
-    // Notify all regional suppliers
     this.notifyAllSuppliers(
       `Product deprecated: ${this.name}`,
       `The product ${this.name} has been deprecated and removed from the catalog.`,
@@ -391,6 +418,56 @@ export class Product {
     this.notifications.push(this.mkNotif("customers@omniproduct.com", `Product no longer available: ${this.name}`, `${this.name} is no longer available.`));
   }
 
+  // --- Consistency ---
+
+  /**
+   * Consistency policy: a mutator changes memory, then persists.
+   * If persisting fails, memory is restored to its state before the call and
+   * the error is rethrown. So after `await product.x()`:
+   *   - resolved -> memory and database agree;
+   *   - rejected -> the product is exactly as it was before the call.
+   * Notifications are only pushed after a successful write.
+   */
+  private async persistOrRollback(before: ProductSnapshot, persist: () => Promise<unknown>): Promise<void> {
+    try {
+      await persist();
+    } catch (error) {
+      this.restore(before);
+      throw error;
+    }
+  }
+
+  /** Copy of every mutable field (collections are copied, not shared). */
+  snapshot(): ProductSnapshot {
+    return {
+      discounts: [...this.discounts],
+      images: { ...this.images },
+      suppliersRegions: new Map(this.suppliersRegions),
+      quantity: this.quantity,
+      stock: this.stock,
+      status: this.status,
+      margin: this.price.margin,
+      validUntil: this.validUntil,
+      updatedAt: this.updatedAt,
+    };
+  }
+
+  /** Puts every mutable field back. Restoring is not a status transition. */
+  restore(snapshot: ProductSnapshot): void {
+    this.discounts = [...snapshot.discounts];
+    this.images = { ...snapshot.images };
+    this.suppliersRegions = new Map(snapshot.suppliersRegions);
+    this.quantity = snapshot.quantity;
+    this.stock = snapshot.stock;
+    this.status = snapshot.status;
+    this.price.changeMargin(snapshot.margin);
+    this.validUntil = snapshot.validUntil;
+    this.updatedAt = snapshot.updatedAt;
+  }
+
+  // --- Notifications ---
+
+  
   /** Pushes one email notification per regional supplier. */
   private notifyAllSuppliers(subject: string, body: string): void {
     for (const [, s] of this.suppliersRegions) {
