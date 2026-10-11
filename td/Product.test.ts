@@ -18,10 +18,15 @@ import { describe, it, expect, vi } from "vitest";
 // itself one of the documented smells — the entity is its own repository).
 // These tests care about naming, not persistence, so Prisma is stubbed out
 // entirely rather than requiring a live database.
+const prismaMock = vi.hoisted(() => ({
+  productUpdate: vi.fn().mockResolvedValue(undefined),
+  productSupplierUpsert: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@prisma/client", () => ({
   PrismaClient: vi.fn().mockImplementation(function (this: any) {
-    this.product = { update: vi.fn().mockResolvedValue(undefined) };
-    this.productSupplier = { upsert: vi.fn().mockResolvedValue(undefined) };
+    this.product = { update: prismaMock.productUpdate };
+    this.productSupplier = { upsert: prismaMock.productSupplierUpsert };
   }),
   Prisma: {},
 }));
@@ -639,5 +644,20 @@ describe("status transitions", () => {
     await product.receiveStock(5);
 
     expect(product.status).toBe("active");
+  });
+});
+
+
+describe("consistency when the database write fails", () => {
+  it("sell() leaves the product unchanged if persistence throws", async () => {
+    prismaMock.productUpdate.mockRejectedValueOnce(new Error("db down"));
+    const product = makeTypedProduct();
+    product.suppliersRegions.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", "EU"));
+
+    await expect(product.sell(30)).rejects.toThrow("db down");
+
+    expect(product.stock).toBe(100);
+    expect(product.status).toBe("active");
+    expect(product.notifications).toEqual([]);
   });
 });
