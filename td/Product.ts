@@ -25,6 +25,18 @@ export interface Notification {
   productId?: string;
 }
 
+/** Base class for business-rule violations (not bugs). */
+export class DomainError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = new.target.name;
+  }
+}
+export class StockError extends DomainError {}
+export class DiscountError extends DomainError {}
+export class ImageError extends DomainError {}
+export class SupplierError extends DomainError {}
+
 export class Supplier {
   constructor(
     public id: string,
@@ -140,7 +152,7 @@ export class Product {
                 } else {
                   // Supplier has a region and email field, but email is malformed (missing valid @domain).
                   // Treat as a data integrity error: throw instead of gracefully degrading.
-                  throw new Error(`Supplier ${s.name} has a malformed email: ${s.email}`);
+                  throw new SupplierError(`Supplier ${s.name} has a malformed email: ${s.email}`);
                 }
               } else {
                 // Supplier has a region but NO email field (empty string, falsy).
@@ -165,12 +177,12 @@ export class Product {
         });
       } else {
         // URL fails the "starts with http" check (smell #24: ad-hoc string validation).
-        throw new Error("url must start with http");
+        throw new ImageError("url must start with http");
       }
     } else {
       // URL is falsy (empty string, null, undefined).
       // Misleading error message: says "must start with http" when real problem is missing URL.
-      throw new Error("url must start with http");
+      throw new ImageError("url must start with http");
     }
   }
 
@@ -184,7 +196,7 @@ export class Product {
 
   async addDiscount(dscCode: string, validUntil: Date): Promise<void> {
     if (!dscCode) {
-      throw new Error("Discount code cannot be empty");
+      throw new DiscountError("Discount code cannot be empty");
     }
 
     // Sanity-check the discount code isn't already applied by
@@ -192,10 +204,10 @@ export class Product {
     // against any non-serializable junk sneaking into `dscs`.
 
     if (validUntil < new Date()) {
-      throw new Error("validUntil cannot be in the past");
+      throw new DiscountError("validUntil cannot be in the past");
     }
     if (this.discounts.length >= 2) {
-      throw new Error("Cannot have more than 2 discounts at the same time");
+      throw new DiscountError("Cannot have more than 2 discounts at the same time");
     }
 
     this.discounts.push(dscCode);
@@ -211,7 +223,7 @@ export class Product {
 
   async addSupplierToRegion(region: string, suppliers: Supplier[]): Promise<void> {
     const s = suppliers.find((x) => x.region === region);
-    if (!s) throw new Error(`No supplier found for region ${region}`);
+    if (!s) throw new SupplierError(`No supplier found for region ${region}`);
 
     this.suppliersRegions.set(region, s);
     this.updatedAt = new Date();
@@ -258,7 +270,7 @@ export class Product {
   }
 
   async sell(qty: number): Promise<void> {
-    if (this.stock < qty) throw new Error("Not enough stock");
+    if (this.stock < qty) throw new StockError("Not enough stock");
 
     this.stock -= qty;
     this.updatedAt = new Date();

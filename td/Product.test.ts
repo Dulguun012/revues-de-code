@@ -26,7 +26,7 @@ vi.mock("@prisma/client", () => ({
   Prisma: {},
 }));
 
-import { Product, Price, Supplier, Warehouse } from "./Product";
+import { Product, Price, Supplier, Warehouse, StockError, DiscountError, ImageError, SupplierError } from "./Product";
 
 function hasProp(obj: unknown, propName: string): boolean {
   return typeof obj === "object" && obj !== null && propName in (obj as object);
@@ -499,5 +499,28 @@ describe("addDiscount() guards", () => {
 
     await expect(product.addDiscount("", validUntil)).rejects.toThrow("Discount code cannot be empty");
     expect(product.discounts).toEqual(["WELCOME10"]);
+  });
+});
+
+
+describe("business errors are typed", () => {
+  it("sell() throws a StockError", async () => {
+    const product = makeTypedProduct();
+    await expect(product.sell(101)).rejects.toBeInstanceOf(StockError);
+  });
+
+  it("addDiscount() throws a DiscountError for a past date", async () => {
+    const product = makeTypedProduct();
+    await expect(product.addDiscount("X", new Date(Date.now() - 1000))).rejects.toBeInstanceOf(DiscountError);
+  });
+
+  it("addImage() throws an ImageError for a bad url", async () => {
+    const product = makeTypedProduct();
+    await expect(product.addImage("hero", "ftp://x")).rejects.toBeInstanceOf(ImageError);
+  });
+
+  it("addSupplierToRegion() throws a SupplierError when no supplier matches", async () => {
+    const product = makeTypedProduct();
+    await expect(product.addSupplierToRegion("APAC", [])).rejects.toBeInstanceOf(SupplierError);
   });
 });
