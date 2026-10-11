@@ -467,6 +467,16 @@ export class Product {
 
   // --- Notifications ---
 
+
+  /**
+   * Hands the pending notifications to whoever sends them, and empties the list.
+   * Lifecycle owner: the caller (the NotificationService, see #24).
+   */
+  pullNotifications(): Notification[] {
+    const pending = this.notifications;
+    this.notifications = [];
+    return pending;
+  }
   
   /** Pushes one email notification per regional supplier. */
   private notifyAllSuppliers(subject: string, body: string): void {
