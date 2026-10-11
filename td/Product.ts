@@ -15,6 +15,14 @@ const prisma = new PrismaClient();
 export type Channel = "email" | "sms" | "push";
 export type ProductStatus = "active" | "out_of_stock" | "deprecated";
 
+
+/** Allowed status changes. Defined once, enforced by Product.transitionTo(). */
+const ALLOWED_TRANSITIONS: Record<ProductStatus, readonly ProductStatus[]> = {
+  active: ["out_of_stock", "deprecated"],
+  out_of_stock: ["active", "deprecated"],
+  deprecated: [],
+};
+
 export interface Notification {
   id: string;
   recipient: string;
@@ -36,6 +44,7 @@ export class StockError extends DomainError {}
 export class DiscountError extends DomainError {}
 export class ImageError extends DomainError {}
 export class SupplierError extends DomainError {}
+export class StatusError extends DomainError {}
 
 export class Supplier {
   constructor(
@@ -179,6 +188,20 @@ export class Product {
     this.updatedAt = new Date();
   }
 
+  /** The only place that changes status (except the initial value). */
+  private transitionTo(next: ProductStatus): void {
+    if (!ALLOWED_TRANSITIONS[this.status].includes(next)) {
+      throw new StatusError(`Cannot go from ${this.status} to ${next}`);
+    }
+    this.status = next;
+  }
+
+  private assertNotDeprecated(action: string): void {
+    if (this.status === "deprecated") {
+      throw new StatusError(`Cannot ${action} a deprecated product`);
+    }
+  }
+
   getDisplayLabel(): string {
     if (this.status === "deprecated") return `[DISCONTINUED] ${this.name}`;
     if (this.stock === 0) return `[OUT OF STOCK] ${this.name}`;
@@ -305,8 +328,12 @@ export class Product {
   // --- Stock ---
 
   async receiveStock(qty: number): Promise<void> {
+    this.assertNotDeprecated("restock");
     this.stock += qty;
     this.quantity += qty;
+    if (this.status === "out_of_stock" && this.stock > 0) {
+      this.transitionTo("active");
+    }
     this.updatedAt = new Date();
     if (this.warehouse) {
       console.log(`Restocking ${this.name} at ${this.warehouse.label()}`);
@@ -320,13 +347,14 @@ export class Product {
   }
 
   async sell(qty: number): Promise<void> {
+    this.assertNotDeprecated("sell");
     if (this.stock < qty) throw new StockError("Not enough stock");
 
     this.stock -= qty;
     this.updatedAt = new Date();
 
-    if (this.stock === 0) {
-      this.status = "out_of_stock";
+    if (this.stock === 0 && this.status !== "out_of_stock") {
+      this.transitionTo("out_of_stock");
     }
 
     await prisma.product.update({
@@ -344,7 +372,7 @@ export class Product {
   // --- Lifecycle ---
 
   async deprecate(): Promise<void> {
-    this.status = "deprecated";
+    this.transitionTo("deprecated");
     this.stock = 0;
     this.updatedAt = new Date();
 
