@@ -254,9 +254,7 @@ export class Product {
   // --- Pricing ---
 
   getResellerPrice(): number {
-    const mgnAmt = (this.price.amount * this.price.margin) / 100;
-    const vatAmt = (mgnAmt * this.price.vat) / 100;
-    return this.price.amount + mgnAmt + vatAmt;
+    return this.price.getResellerPrice();
   }
 
   async setMargin(mgnPct: number): Promise<void> {
