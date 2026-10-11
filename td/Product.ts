@@ -44,6 +44,24 @@ export class Supplier {
     public email: string,
     public region: string,
   ) {}
+
+  /** Who receives this supplier's notifications. */
+  notificationRecipient(): string {
+    return this.email;
+  }
+
+  /**
+   * Suffix this supplier gives to an image key, or null if it is not a
+   * regional supplier. Missing email -> generic "supplier"; malformed email -> error.
+   */
+  imageKeySuffix(): string | null {
+    if (!this.region) return null;
+    if (!this.email) return "supplier";
+    if (!isValidEmail(this.email)) {
+      throw new SupplierError(`Supplier ${this.name} has a malformed email: ${this.email}`);
+    }
+    return this.name;
+  }
 }
 
 export class Warehouse {
@@ -53,6 +71,11 @@ export class Warehouse {
     public address: string,
     public region: string,
   ) {}
+
+  /** How this warehouse names itself in labels and keys. */
+  label(): string {
+    return this.name;
+  }
 }
 
 /** Default margin applied to a price, in percent. Business decision: change it here only. */
@@ -77,6 +100,15 @@ export class Price {
     const marginAmount = (this.amount * this.margin) / 100;
     const vatAmount = (marginAmount * this.vat) / 100;
     return this.amount + marginAmount + vatAmount;
+  }
+
+  
+  /** Changes the margin, in percent. Rejects negative or non-numeric values. */
+  changeMargin(percent: number): void {
+    if (!Number.isFinite(percent) || percent < 0) {
+      throw new DomainError(`Invalid margin: ${percent}`);
+    }
+    this.margin = percent;
   }
 
 }
@@ -191,15 +223,9 @@ export class Product {
     const suppliers = [...this.suppliersRegions.values()];
     if (suppliers.length === 0) return context;
 
-    const supplier = suppliers[0];
-    if (!supplier.region) {
-      return this.warehouse ? `${context}-${this.warehouse.name}` : context;
-    }
-    if (!supplier.email) return `${context}-supplier`;
-    if (!isValidEmail(supplier.email)) {
-      throw new SupplierError(`Supplier ${supplier.name} has a malformed email: ${supplier.email}`);
-    }
-    return `${context}-${supplier.name}`;
+    const suffix = suppliers[0].imageKeySuffix();
+    if (suffix !== null) return `${context}-${suffix}`;
+    return this.warehouse ? `${context}-${this.warehouse.label()}` : context;
   }
 
   getValidUntil(): Date | null {
@@ -257,12 +283,12 @@ export class Product {
     return this.price.getResellerPrice();
   }
 
-  async setMargin(mgnPct: number): Promise<void> {
-    this.price.margin = mgnPct;
+  async setMargin(marginPercent: number): Promise<void> {
+    this.price.changeMargin(marginPercent);
     this.updatedAt = new Date();
     await prisma.product.update({
       where: { id: this.id },
-      data: { priceMargin: mgnPct, updatedAt: this.updatedAt },
+      data: { priceMargin: marginPercent, updatedAt: this.updatedAt },
     });
   }
 
@@ -273,7 +299,7 @@ export class Product {
     this.quantity += qty;
     this.updatedAt = new Date();
     if (this.warehouse) {
-      console.log(`Restocking ${this.name} at ${this.warehouse.name}`);
+      console.log(`Restocking ${this.name} at ${this.warehouse.label()}`);
     } else {
       console.log(`Restocking ${this.name} (no warehouse assigned)`);
     }
@@ -330,7 +356,7 @@ export class Product {
   /** Pushes one email notification per regional supplier. */
   private notifyAllSuppliers(subject: string, body: string): void {
     for (const [, s] of this.suppliersRegions) {
-      this.notifications.push(this.mkNotif(s.email, subject, body));
+      this.notifications.push(this.mkNotif(s.notificationRecipient(), subject, body));
     }
   }
 
