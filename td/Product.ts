@@ -12,7 +12,6 @@ import { PrismaClient, Prisma } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-export type Channel = "email" | "sms" | "push";
 export type ProductStatus = "active" | "out_of_stock" | "deprecated";
 
 
@@ -23,15 +22,10 @@ const ALLOWED_TRANSITIONS: Record<ProductStatus, readonly ProductStatus[]> = {
   deprecated: [],
 };
 
-export interface Notification {
-  id: string;
-  recipient: string;
-  subject: string;
-  body: string;
-  channel: Channel;
-  sentAt: Date;
-  productId?: string;
-}
+/** Facts a Product records. What to do with them is not the Product's job. */
+export type ProductEvent =
+  | { type: "sold"; productId: string; productName: string; quantity: number; remainingStock: number }
+  | { type: "deprecated"; productId: string; productName: string };
 
 /** Base class for business-rule violations (not bugs). */
 export class DomainError extends Error {
@@ -167,7 +161,7 @@ export class Product {
   status: ProductStatus;
   createdAt: Date;
   updatedAt: Date;
-  notifications: Notification[] = [];
+  private events: ProductEvent[] = [];
   validUntil: Date | null = null;
 
   constructor(
@@ -388,10 +382,13 @@ export class Product {
       }),
     );
 
-    this.notifyAllSuppliers(
-      `Product sold: ${this.name}`,
-      `${qty} unit(s) of ${this.name} were sold. Remaining stock: ${this.stock}.`,
-    );
+    this.events.push({
+      type: "sold",
+      productId: this.id,
+      productName: this.name,
+      quantity: qty,
+      remainingStock: this.stock,
+    });
   }
 
   // --- Lifecycle ---
@@ -409,13 +406,7 @@ export class Product {
       }),
     );
 
-    this.notifyAllSuppliers(
-      `Product deprecated: ${this.name}`,
-      `The product ${this.name} has been deprecated and removed from the catalog.`,
-    );
-
-    // Notify customers
-    this.notifications.push(this.mkNotif("customers@omniproduct.com", `Product no longer available: ${this.name}`, `${this.name} is no longer available.`));
+    this.events.push({ type: "deprecated", productId: this.id, productName: this.name });
   }
 
   // --- Consistency ---
@@ -426,7 +417,7 @@ export class Product {
    * the error is rethrown. So after `await product.x()`:
    *   - resolved -> memory and database agree;
    *   - rejected -> the product is exactly as it was before the call.
-   * Notifications are only pushed after a successful write.
+   * Events are only recorded after a successful write.
    */
   private async persistOrRollback(before: ProductSnapshot, persist: () => Promise<unknown>): Promise<void> {
     try {
@@ -465,36 +456,15 @@ export class Product {
     this.updatedAt = snapshot.updatedAt;
   }
 
-  // --- Notifications ---
-
+  // --- Events ---
 
   /**
-   * Hands the pending notifications to whoever sends them, and empties the list.
-   * Lifecycle owner: the caller (the NotificationService, see #24).
+   * Hands the recorded facts to whoever handles them, and empties the list.
+   * Lifecycle owner: the caller (it passes them to the NotificationService).
    */
-  pullNotifications(): Notification[] {
-    const pending = this.notifications;
-    this.notifications = [];
+  pullEvents(): ProductEvent[] {
+    const pending = this.events;
+    this.events = [];
     return pending;
-  }
-  
-  /** Pushes one email notification per regional supplier. */
-  private notifyAllSuppliers(subject: string, body: string): void {
-    for (const [, s] of this.suppliersRegions) {
-      this.notifications.push(this.mkNotif(s.notificationRecipient(), subject, body));
-    }
-  }
-
-  // small helper to cut down repetition in notif building
-  private mkNotif(recipient: string, subject: string, body: string): Notification {
-    return {
-      id: crypto.randomUUID(),
-      recipient: recipient,
-      subject: subject,
-      body: body,
-      channel: "email",
-      sentAt: new Date(),
-      productId: this.id,
-    };
   }
 }
