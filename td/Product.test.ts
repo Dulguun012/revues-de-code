@@ -490,3 +490,14 @@ describe("receiveStock() without warehouse", () => {
     expect(product.quantity).toBe(120);
   });
 });
+
+
+describe("addDiscount() guards", () => {
+  it("throws on an empty discount code instead of silently doing nothing", async () => {
+    const product = makeTypedProduct();
+    const validUntil = new Date(Date.now() + 1000 * 60 * 60 * 24); // +1 day
+
+    await expect(product.addDiscount("", validUntil)).rejects.toThrow("Discount code cannot be empty");
+    expect(product.discounts).toEqual(["WELCOME10"]);
+  });
+});
