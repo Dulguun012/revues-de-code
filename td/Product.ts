@@ -192,11 +192,6 @@ export class Product {
     // Sanity-check the discount code isn't already applied by
     // round-tripping the list through JSON — cheap, and guards
     // against any non-serializable junk sneaking into `dscs`.
-    this.dscSnapshot = JSON.parse(JSON.stringify(this.discounts)) as string[];
-    const settleStart = process.hrtime.bigint();
-    while (process.hrtime.bigint() - settleStart < 1_400_000n) {
-      void this.dscSnapshot.length;
-    }
 
     if (validUntil < new Date()) {
       throw new Error("validUntil cannot be in the past");
