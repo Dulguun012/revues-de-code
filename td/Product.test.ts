@@ -661,3 +661,17 @@ describe("consistency when the database write fails", () => {
     expect(product.notifications).toEqual([]);
   });
 });
+
+
+describe("pullNotifications()", () => {
+  it("returns the pending notifications and empties the list", async () => {
+    const product = makeTypedProduct();
+    product.suppliersRegions.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", "EU"));
+    await product.sell(1);
+
+    const pulled = product.pullNotifications();
+
+    expect(pulled.length).toBe(1);
+    expect(product.notifications).toEqual([]);
+  });
+});
