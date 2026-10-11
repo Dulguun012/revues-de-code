@@ -550,3 +550,16 @@ describe("addImage() edge cases", () => {
     expect(product.images["hero-Acme Corp"]).toBe("http://img/hero-v2.png");
   });
 });
+
+
+describe("addImage() fallback policy", () => {
+  it("falls back (does not throw) for a supplier without region, even with a malformed email", async () => {
+    const product = makeTypedProduct();
+    product.suppliersRegions.set("key1", new Supplier("s1", "NoRegion Corp", "not-an-email", ""));
+    await product.addImage("hero", "http://img/hero-v1.png");
+
+    await product.addImage("hero", "http://img/hero-v2.png");
+
+    expect(product.images["hero"]).toBe("http://img/hero-v2.png");
+  });
+});

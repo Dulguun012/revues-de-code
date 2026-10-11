@@ -177,6 +177,15 @@ export class Product {
   /**
    * Key used when an image already exists for this context.
    * Several suppliers: the FIRST supplier registered (insertion order) decides.
+   *
+   * Fallback policy:
+   * - MISSING data falls back silently to a less specific key:
+   *     no supplier          -> plain context
+   *     supplier, no region  -> warehouse name, else plain context
+   *     region, no email     -> generic "-supplier" suffix
+   * - PRESENT but INVALID data is an error:
+   *     malformed email      -> SupplierError
+   * - Complete, valid data   -> supplier name suffix
    */
   private keyForExistingImage(context: string): string {
     const suppliers = [...this.suppliersRegions.values()];
